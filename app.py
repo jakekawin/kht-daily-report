@@ -27,7 +27,7 @@ TH_MO_S = ['','ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','ม�
 SHEET_HEADERS = {
     "teams":         ["id", "name", "contractTypeId", "note", "active"],
     "contractTypes": ["id", "name", "calcMode", "manRate"],
-    "projects":      ["id", "name", "unit", "unitRate", "description", "active"],
+    "projects":      ["id", "name", "unit", "unitRate", "description", "active", "target"],
     "reports":       ["id", "date", "teamId", "workers", "note", "items", "posItems", "photos", "total"],
     "payments":      ["id", "tid", "y", "mo", "p", "paid", "paidDate", "note"],
     "positions":     ["id", "name", "dailyRate"],
@@ -145,6 +145,7 @@ def load_db():
 
         for p in projects:
             p['unitRate'] = _f(p.get('unitRate', 0))
+            p['target']   = _f(p.get('target',   0))
         for pay in payments:
             raw = pay.get('paid', '')
             pay['paid'] = str(raw).upper() in ('TRUE', '1', 'YES')
@@ -228,6 +229,85 @@ def get_payment(tid, yr, mo, p):
     return next((x for x in st.session_state.db['payments']
                  if x['tid']==tid and _i(x['y'])==yr and
                     _i(x['mo'])==mo and _i(x['p'])==p), None)
+
+# ─── EXCEL EXPORT ─────────────────────────────────────
+def _build_period_excel(yr, mo):
+    """สร้าง Excel สรุปรายงวด (2 งวด) + รายละเอียด + สรุปเดือน"""
+    import io
+    buf = io.BytesIO()
+    m_str = str(mo).zfill(2)
+
+    with pd.ExcelWriter(buf, engine='openpyxl') as writer:
+        for period in [1, 2]:
+            s, e = pdates(yr, mo, period)
+            sday = 1 if period == 1 else 16
+            eday = 15 if period == 1 else calendar.monthrange(yr, mo)[1]
+
+            sum_rows, detail_rows = [], []
+            for t in st.session_state.db.get('teams', []):
+                rpts_t = [r for r in st.session_state.db.get('reports', [])
+                          if r['teamId'] == t['id'] and s <= r['date'] <= e]
+                tot    = sum(_f(r.get('total', 0)) for r in rpts_t)
+                manday = sum(_i(r.get('workers', 0)) for r in rpts_t)
+                pay    = get_payment(t['id'], yr, mo, period)
+                ip     = bool(pay and pay.get('paid'))
+
+                sum_rows.append({
+                    "ทีม":           t['name'],
+                    "วันทำงาน":     len(rpts_t),
+                    "คน-วัน":       manday,
+                    "ยอดรวม (฿)":   round(tot, 2),
+                    "สถานะ":         "จ่ายแล้ว" if ip else "ยังไม่จ่าย",
+                    "วันที่จ่าย":   pay.get('paidDate', '') if pay else '',
+                    "หมายเหตุ":      pay.get('note', '') if pay else '',
+                })
+                for r in sorted(rpts_t, key=lambda x: x['date']):
+                    tname_r = t['name']
+                    for it in r.get('items', []):
+                        qty = _f(it.get('qty', 0))
+                        if qty <= 0: continue
+                        detail_rows.append({
+                            "วันที่":        r['date'],
+                            "ทีม":          tname_r,
+                            "คนงาน":        r['workers'],
+                            "ประเภทงาน":   get_proj(it['pid']).get('name', '?'),
+                            "ปริมาณ":       qty,
+                            "หน่วย":        it.get('unit', ''),
+                            "ต้นทุน (฿)":  round(_f(r.get('total', 0)), 2),
+                        })
+
+            sheet_s = f"สรุปงวด{period}"
+            sheet_d = f"รายละเอียดงวด{period}"
+            pd.DataFrame(sum_rows).to_excel(writer, sheet_name=sheet_s, index=False)
+            if detail_rows:
+                pd.DataFrame(detail_rows).to_excel(writer, sheet_name=sheet_d, index=False)
+
+        # ── Monthly summary ──
+        cum_rows = []
+        for t in st.session_state.db.get('teams', []):
+            trpts = [r for r in st.session_state.db.get('reports', [])
+                     if r['teamId'] == t['id'] and r['date'].startswith(f"{yr}-{m_str}")]
+            tot    = sum(_f(r['total']) for r in trpts)
+            manday = sum(_i(r['workers']) for r in trpts)
+            pd_tot = 0.0
+            for pp in [1, 2]:
+                pay2 = get_payment(t['id'], yr, mo, pp)
+                if pay2 and pay2.get('paid'):
+                    s2, e2 = pdates(yr, mo, pp)
+                    pd_tot += sum(_f(r['total']) for r in st.session_state.db.get('reports', [])
+                                  if r['teamId'] == t['id'] and s2 <= r['date'] <= e2)
+            cum_rows.append({
+                "ทีม":          t['name'],
+                "คน-วัน":      manday,
+                "ยอดรวม (฿)":  round(tot, 2),
+                "จ่ายแล้ว (฿)": round(pd_tot, 2),
+                "ค้าง (฿)":    round(tot - pd_tot, 2),
+            })
+        if cum_rows:
+            pd.DataFrame(cum_rows).to_excel(writer, sheet_name="สรุปรายเดือน", index=False)
+
+    buf.seek(0)
+    return buf.getvalue()
 
 # ─── AUTH ─────────────────────────────────────────────
 def check_login(role_key, pw):
@@ -931,12 +1011,25 @@ elif PAGE == "view":
 # ═══════════════════════════════════════════════════════
 elif PAGE == "summary" and can_summary:
     st.markdown("### 📈 สรุปรายงวด")
-    sc1,sc2 = st.columns(2)
+    sc1,sc2,sc3 = st.columns([1,1,1])
     with sc1: sel_year  = st.number_input("ปี (ค.ศ.)", min_value=2020, max_value=2035, value=date.today().year)
     with sc2: sel_month = st.selectbox("เดือน", list(range(1,13)),
                                         index=date.today().month-1,
                                         format_func=lambda m: TH_MO[m])
     yr2, mo2 = int(sel_year), int(sel_month)
+    with sc3:
+        st.markdown("<div style='padding-top:1.7rem'></div>", unsafe_allow_html=True)
+        try:
+            _excel_bytes = _build_period_excel(yr2, mo2)
+            st.download_button(
+                label="📥 Export Excel",
+                data=_excel_bytes,
+                file_name=f"KHT-Report-{yr2}-{str(mo2).zfill(2)}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True,
+            )
+        except Exception as _ex:
+            st.caption(f"Export ไม่ได้: {_ex}")
 
     def render_period(period):
         s,e   = pdates(yr2, mo2, period)
@@ -1172,16 +1265,18 @@ elif PAGE == "settings" and can_settings:
                 p1,p2 = st.columns(2)
                 with p1: pn = st.text_input("ชื่องาน *")
                 with p2: pd2 = st.text_input("คำอธิบาย")
-                p3,p4,p5 = st.columns([2,2,1])
+                p3,p4,p5,p6 = st.columns([2,1.5,1.5,1])
                 with p3: pu = st.text_input("หน่วย * (เช่น ม., kg)")
                 with p4: pr = st.number_input("Unit Rate (฿/หน่วย)", min_value=0.0, step=0.01)
-                with p5: p_active = st.selectbox("สถานะ", ["🟢 Online", "⭕ Offline"])
+                with p5: pt = st.number_input("เป้าหมายรวม (qty)", min_value=0.0, step=1.0,
+                                              help="ปริมาณงานทั้งหมดของ Scope งานนี้ (ใช้ติดตาม % แล้วเสร็จ)")
+                with p6: p_active = st.selectbox("สถานะ", ["🟢 Online", "⭕ Offline"])
                 if st.form_submit_button("💾 บันทึก", type="primary"):
                     if not pn.strip() or not pu.strip():
                         st.error("กรุณากรอกข้อมูลให้ครบ")
                     else:
                         DB['projects'].append({'id':next_id('projects'),'name':pn.strip(),'unit':pu.strip(),
-                                               'unitRate':pr,'description':pd2.strip(),
+                                               'unitRate':pr,'description':pd2.strip(),'target':pt,
                                                'active': '0' if 'Offline' in p_active else '1'})
                         with st.spinner("กำลังบันทึก..."): save_db("projects")
                         st.success("✅ บันทึกสำเร็จ"); st.rerun()
@@ -1191,14 +1286,17 @@ elif PAGE == "settings" and can_settings:
             p_online = str(p.get('active', '1')) != '0'
             p_icon   = "🟢" if p_online else "⭕"
             with st.expander(f"{p_icon} **{p['name']}** — {p['unit']} — ฿{N(p['unitRate'])}/หน่วย"):
-                e1,e2,e3,e4 = st.columns([2,1,1,1])
+                e1,e2,e3,e4,e5 = st.columns([2,1,1,1,1])
                 with e1:
                     npn = st.text_input("ชื่องาน", value=p['name'], key=f"pn_{p['id']}")
                     npd = st.text_input("คำอธิบาย", value=p.get('description',''), key=f"pd_{p['id']}")
                 with e2: npu = st.text_input("หน่วย", value=p['unit'], key=f"pu_{p['id']}")
                 with e3: npr = st.number_input("Unit Rate", value=_f(p['unitRate']),
                                                min_value=0.0, step=0.01, key=f"pr_{p['id']}")
-                with e4:
+                with e4: npt = st.number_input("เป้าหมาย (qty)", value=_f(p.get('target',0)),
+                                               min_value=0.0, step=1.0, key=f"ptgt_{p['id']}",
+                                               help="ปริมาณงานทั้งหมดของ Scope")
+                with e5:
                     p_act_opts = ["🟢 Online", "⭕ Offline"]
                     np_act = st.selectbox("สถานะ", p_act_opts,
                                          index=0 if p_online else 1,
@@ -1207,6 +1305,7 @@ elif PAGE == "settings" and can_settings:
                 with b1:
                     if st.button("💾 บันทึก", key=f"ps_{p['id']}", use_container_width=True):
                         p['name']=npn; p['unit']=npu; p['unitRate']=npr; p['description']=npd
+                        p['target'] = npt
                         p['active'] = '0' if 'Offline' in np_act else '1'
                         with st.spinner("กำลังบันทึก..."): save_db("projects")
                         st.success("บันทึกแล้ว"); st.rerun()
@@ -1423,6 +1522,69 @@ elif PAGE == "productivity":
             st.dataframe(pd.DataFrame(p_rows), hide_index=True, use_container_width=True)
         else:
             st.info("ยังไม่มีรายการงานที่บันทึก")
+
+        # ── Target vs Actual (ยอดสะสมทั้งโครงการ) ────────────────────────
+        projs_with_target = [p for p in DB['projects'] if _f(p.get('target', 0)) > 0]
+        if projs_with_target:
+            st.markdown("---")
+            st.markdown("#### 🎯 Target vs Actual (ยอดสะสมทั้งโครงการ)")
+            end_date = max(r['date'] for r in rpts_f) if rpts_f else today_str()
+            ta_rows = []
+            for p in projs_with_target:
+                target  = _f(p.get('target', 0))
+                # สะสมทั้งหมดถึงวันสุดท้ายใน range
+                actual_total = sum(
+                    _f(it.get('qty', 0))
+                    for r in DB['reports'] if r['date'] <= end_date
+                    for it in r.get('items', [])
+                    if it.get('pid') == p['id']
+                )
+                # เฉพาะช่วงที่เลือก
+                actual_range = sum(
+                    _f(it.get('qty', 0))
+                    for r in rpts_f
+                    for it in r.get('items', [])
+                    if it.get('pid') == p['id']
+                )
+                pct       = min(actual_total / target * 100, 100) if target else 0
+                remaining = max(0.0, target - actual_total)
+                ta_rows.append({
+                    "ประเภทงาน":        p['name'],
+                    "หน่วย":            p['unit'],
+                    "เป้าหมายรวม":      target,
+                    "ทำแล้ว (สะสม)":   round(actual_total, 2),
+                    "ช่วงนี้":          round(actual_range, 2),
+                    "% แล้วเสร็จ":      f"{pct:.1f}%",
+                    "คงเหลือ":          round(remaining, 2),
+                })
+            if ta_rows:
+                st.dataframe(pd.DataFrame(ta_rows), hide_index=True, use_container_width=True)
+
+        # ── Cumulative Cost Chart (Admin only) ────────────────────────────
+        if can_see_money:
+            st.markdown("---")
+            st.markdown("#### 📈 ต้นทุนสะสมรายวัน")
+            daily_cost: dict = defaultdict(float)
+            for r in rpts_f:
+                daily_cost[r['date']] += _f(r.get('total', 0))
+            if daily_cost:
+                dates_sorted = sorted(daily_cost.keys())
+                running = 0.0
+                cum_data = []
+                for d in dates_sorted:
+                    running += daily_cost[d]
+                    cum_data.append({
+                        "วันที่":         d,
+                        "ต้นทุนสะสม (฿)": running,
+                        "รายวัน (฿)":    daily_cost[d],
+                    })
+                chart_df = pd.DataFrame(cum_data).set_index("วันที่")
+                st.area_chart(chart_df[["ต้นทุนสะสม (฿)"]])
+                # แสดงตารางขนาดย่อ
+                with st.expander("📋 ตารางต้นทุนรายวัน", expanded=False):
+                    disp_df = pd.DataFrame(cum_data)
+                    disp_df["วันที่"] = disp_df["วันที่"].apply(thd)
+                    st.dataframe(disp_df, hide_index=True, use_container_width=True)
 
     # ─── filter options ────────────────────────────────────────────────────
     all_teams   = ["ทุกทีม"]  + [t['name'] for t in DB['teams']]
