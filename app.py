@@ -848,6 +848,17 @@ elif PAGE == "view":
                         irows.append(row2)
                     st.dataframe(pd.DataFrame(irows), hide_index=True, use_container_width=True)
                     if r.get('note'): st.caption(f"📝 {r['note']}")
+                    # ── แสดงรูปภาพ ──────────────────────────
+                    _ph_list = r.get('photos') or []
+                    if _ph_list:
+                        st.markdown("**📷 รูปภาพ**")
+                        _ph_cols2 = st.columns(min(len(_ph_list), 3))
+                        for _i2, _ph2 in enumerate(_ph_list):
+                            with _ph_cols2[_i2 % 3]:
+                                _img_url = _ph2.get('thumb') or _ph2.get('url', '')
+                                if _img_url:
+                                    st.image(_img_url, use_container_width=True)
+                                    st.caption(_ph2.get('name', f"รูป {_i2+1}"))
                 with dc2:
                     st.metric("คนงาน", r['workers'])
                     if can_see_money: st.metric("รวม (฿)", N(r['total']))
