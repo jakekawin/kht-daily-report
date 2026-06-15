@@ -6,7 +6,7 @@ import pandas as pd
 import gspread
 from google.oauth2.service_account import Credentials
 
-# ─── PAGE CONFIG ─────────────────────────────────────
+# ─── PAGE CONFIG ────────────────────────────────────
 st.set_page_config(
     page_title="KHT Daily Report",
     page_icon="⛑️",
@@ -403,21 +403,61 @@ elif PAGE == "add" and can_edit:
     st.markdown("---")
 
     if calc_mode == 'by_workers':
-        # ── By-workers mode: total = workers × man_rate ──
+        # ── By-workers mode: total = workers × man_rate, items tracked for productivity ──
         auto_total = int(r_workers) * man_rate
         if can_see_money:
             st.info(f"📋 **{team_ct['name']}** — คิดตามจำนวนคน | Man Rate: ฿{N(man_rate)}/คน | "
                     f"รวม: ฿{N(auto_total)}")
         else:
             st.info(f"📋 **{team_ct['name']}** — คิดตามจำนวนคน")
-        st.session_state.wi = []
+
+        st.markdown("**📋 รายการงาน (สำหรับติดตาม Productivity)**")
+        if not DB['projects']:
+            st.warning("ยังไม่มีประเภทงาน — ขอให้ Admin เพิ่มก่อน")
+        else:
+            pnames = [p['name'] for p in DB['projects']]
+            pids   = [p['id']   for p in DB['projects']]
+            to_rm  = None
+
+            for idx, item in enumerate(st.session_state.wi):
+                c1, c2, c3, c4 = st.columns([3, 1, 1.5, 0.5])
+                with c1:
+                    cur_pi = pids.index(item['pid']) if item.get('pid') in pids else 0
+                    sel = st.selectbox(f"งาน#{idx+1}", pnames, index=cur_pi,
+                                       key=f"psel_{idx}", label_visibility="collapsed")
+                    sp = DB['projects'][pnames.index(sel)]
+                    item['pid']  = sp['id']
+                    item['unit'] = sp['unit']
+                    item['rate'] = 0
+                with c2:
+                    st.text_input("หน่วย", value=item['unit'], disabled=True,
+                                  key=f"unit_{idx}", label_visibility="collapsed")
+                with c3:
+                    item['qty'] = st.number_input("ปริมาณ", min_value=0.0,
+                                                  value=float(item.get('qty', 0)),
+                                                  step=0.01, key=f"qty_{idx}",
+                                                  label_visibility="collapsed")
+                    item['amt'] = 0
+                with c4:
+                    if st.button("🗑️", key=f"del_{idx}"): to_rm = idx
+
+            if to_rm is not None:
+                st.session_state.wi.pop(to_rm); st.rerun()
+
+            ab, _ = st.columns([1, 5])
+            with ab:
+                if st.button("➕ เพิ่มรายการงาน"):
+                    fp = DB['projects'][0]
+                    st.session_state.wi.append({'id': uid(), 'pid': fp['id'],
+                        'unit': fp['unit'], 'rate': 0, 'qty': 0, 'amt': 0})
+                    st.rerun()
 
         st.markdown("---")
         s1,s2,_ = st.columns([1.2,1,5])
         with s1: save_btn = st.button("💾 บันทึกข้อมูล", type="primary", use_container_width=True)
         with s2:
             if st.button("🗑️ ล้างข้อมูล", use_container_width=True):
-                st.session_state.edit_id = None; st.rerun()
+                st.session_state.wi = []; st.session_state.edit_id = None; st.rerun()
 
         if save_btn:
             if int(r_workers) <= 0:
@@ -429,7 +469,7 @@ elif PAGE == "add" and can_edit:
                     'teamId':  r_tid,
                     'workers': int(r_workers),
                     'note':    r_note,
-                    'items':   [],
+                    'items':   [dict(w) for w in st.session_state.wi],
                     'total':   auto_total,
                 }
                 with st.spinner("กำลังบันทึก..."):
@@ -790,9 +830,9 @@ elif PAGE == "settings" and can_settings:
                         with st.spinner("กำลังบันทึก..."): save_db("teams")
                         st.rerun()
 
-    # ═══════════════════════════════════════
+    # ════════════════════════════════════════
     # TAB: ประเภทการจ้าง
-    # ═══════════════════════════════════════
+    # ════════════════════════════════════════
     with tab_ct:
         with st.expander("➕ เพิ่มประเภทการจ้างใหม่", expanded=(not ct_list)):
             with st.form("add_ct"):
@@ -809,7 +849,7 @@ elif PAGE == "settings" and can_settings:
                     else:
                         new_cm = cm_keys[cm_opts.index(ctm_sel)]
                         DB.setdefault('contractTypes', []).append(
-                                  {'id':uid(),'name':ctn.strip(),'calcMode':new_cm,'manRate':ct_mr})
+                            {'id':uid(),'name':ctn.strip(),'calcMode':new_cm,'manRate':ct_mr})
                         with st.spinner("กำลังบันทึก..."): save_db("contractTypes")
                         st.success("✅ บันทึกสำเร็จ"); st.rerun()
         st.markdown("---")
