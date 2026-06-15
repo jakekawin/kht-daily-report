@@ -338,12 +338,17 @@ if PAGE == "dashboard":
     with cb: st.metric("🔧 ประเภทงาน", len(DB['projects']))
 
     st.markdown("---")
-    st.markdown("#### 📋 ผลงานวันนี้")
-    if not today_rpts:
-        st.info("ยังไม่มีข้อมูลวันนี้")
+    sel_dt       = st.date_input("📅 เลือกวันที่ดูผลงาน", value=now, key="dash_dt")
+    sel_date_str = sel_dt.isoformat()
+    day_lbl      = "วันนี้" if sel_date_str == today else thd(sel_date_str)
+    sel_rpts     = [r for r in DB['reports'] if r['date'] == sel_date_str]
+
+    st.markdown(f"#### 📋 ผลงาน{day_lbl}")
+    if not sel_rpts:
+        st.info(f"ยังไม่มีข้อมูล{day_lbl}")
     else:
         rows = []
-        for r in today_rpts:
+        for r in sel_rpts:
             items_str = " | ".join(
                 f"{get_proj(it['pid'])['name']}: {it['qty']} {it['unit']}"
                 + (f" = {N(it['amt'])}฿" if can_see_money else "")
@@ -356,9 +361,9 @@ if PAGE == "dashboard":
         st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
     # ── Productivity วันนี้ ──────────────────────────────
-    if today_rpts:
+    if sel_rpts:
         prod_dict = {}
-        for r in today_rpts:
+        for r in sel_rpts:
             w = _i(r['workers'])
             if w <= 0: continue
             for it in r['items']:
@@ -369,7 +374,7 @@ if PAGE == "dashboard":
                 prod_dict[pid]['qty'] += _f(it['qty'])
                 prod_dict[pid]['md']  += w
         if prod_dict:
-            st.markdown("#### 📈 Productivity วันนี้ (unit / คน-วัน)")
+            st.markdown(f"#### 📈 Productivity {day_lbl} (unit / คน-วัน)")
             prod_rows = []
             for v in prod_dict.values():
                 md = v['md']
