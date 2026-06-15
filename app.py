@@ -1235,184 +1235,266 @@ elif PAGE == "productivity":
     st.markdown("### 📉 Productivity — ติดตามผลงาน")
 
     now = date.today()
-    tab_daily, tab_period = st.tabs(["📅 รายวัน", "📊 รายงวด"])
 
+    # ─── helpers ───────────────────────────────────────────────────────────
     def _proj_name(pid):
         return get_proj(pid).get('name', '?')
 
     def _team_name(tid):
         return get_team(tid).get('name', '?')
 
-    # ════════════════════════════════════════
-    # TAB: รายวัน
-    # ════════════════════════════════════════
-    with tab_daily:
-        c1, c2, c3 = st.columns([1, 1, 2])
-        with c1:
-            sel_yr = st.selectbox("ปี (พ.ศ.)", [now.year+543-i for i in range(4)],
-                                  key="pd_yr", format_func=lambda x: str(x))
-        with c2:
-            sel_mo = st.selectbox("เดือน", list(range(1, 13)), index=now.month - 1,
-                                  format_func=lambda x: TH_MO[x], key="pd_mo")
-        with c3:
-            team_opts = ["ทุกทีม"] + [t['name'] for t in DB['teams']]
-            sel_team = st.selectbox("ทีม", team_opts, key="pd_team")
+    def _ct_name(ctid):
+        return next((c['name'] for c in DB['contractTypes'] if c['id'] == ctid), '?')
 
-        yr_ad  = sel_yr - 543
-        m_str  = str(sel_mo).zfill(2)
-        prefix = f"{yr_ad}-{m_str}"
+    def _team_ct(tid):
+        t = get_team(tid)
+        return _ct_name(t.get('contractTypeId', ''))
 
-        rpts = [r for r in DB['reports'] if r['date'].startswith(prefix)]
-        if sel_team != "ทุกทีม":
-            tid_sel = next((t['id'] for t in DB['teams'] if t['name'] == sel_team), None)
-            rpts = [r for r in rpts if r['teamId'] == tid_sel]
+    def _apply_filters(rpts, f_team, f_ct, f_proj):
+        out = rpts
+        if f_team != "ทุกทีม":
+            tid = next((t['id'] for t in DB['teams'] if t['name'] == f_team), None)
+            out = [r for r in out if r['teamId'] == tid]
+        if f_ct != "ทุกประเภทการจ้าง":
+            out = [r for r in out if _team_ct(r['teamId']) == f_ct]
+        if f_proj != "ทุกประเภทงาน":
+            out = [r for r in out if any(
+                _proj_name(it['pid']) == f_proj for it in r.get('items', [])
+            )]
+        return out
 
-        if not rpts:
-            st.info("ไม่มีข้อมูลในช่วงที่เลือก")
-        else:
-            # ── รายการงานแต่ละวัน ──
-            rows = []
-            for r in sorted(rpts, key=lambda x: x['date']):
-                tname   = _team_name(r['teamId'])
-                workers = _i(r.get('workers', 0))
-                items   = r.get('items', [])
-                if items and any(_f(it.get('qty', 0)) > 0 for it in items):
-                    for it in items:
-                        qty = _f(it.get('qty', 0))
-                        if qty <= 0:
-                            continue
-                        rows.append({
-                            "วันที่":           thd(r['date']),
-                            "ทีม":              tname,
-                            "คนงาน (คน)":      workers,
-                            "ประเภทงาน":       _proj_name(it['pid']),
-                            "ปริมาณ":          qty,
-                            "หน่วย":           it.get('unit', ''),
-                            "Productivity/คน": round(qty / workers, 3) if workers else 0,
-                        })
-                else:
+    def _render_detail_table(rpts_f, f_proj):
+        """ตารางรายละเอียดแต่ละ record"""
+        rows = []
+        for r in sorted(rpts_f, key=lambda x: (x['date'], _team_name(x['teamId']))):
+            tname   = _team_name(r['teamId'])
+            ctname  = _team_ct(r['teamId'])
+            workers = _i(r.get('workers', 0))
+            total   = _f(r.get('total', 0))
+            items   = r.get('items', [])
+            items_f = [it for it in items if _f(it.get('qty', 0)) > 0
+                       and (f_proj == "ทุกประเภทงาน" or _proj_name(it['pid']) == f_proj)]
+            if items_f:
+                for it in items_f:
+                    qty = _f(it.get('qty', 0))
                     rows.append({
                         "วันที่":           thd(r['date']),
                         "ทีม":              tname,
+                        "ประเภทการจ้าง":   ctname,
                         "คนงาน (คน)":      workers,
-                        "ประเภทงาน":       "—",
-                        "ปริมาณ":          0,
-                        "หน่วย":           "",
-                        "Productivity/คน": 0,
+                        "ประเภทงาน":       _proj_name(it['pid']),
+                        "ปริมาณ":          qty,
+                        "หน่วย":           it.get('unit', ''),
+                        "Prod/คน":         round(qty / workers, 3) if workers else 0,
+                        "ต้นทุน (บาท)":   total if total else "—",
                     })
-
-            st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
-
-            # ── สรุปปริมาณงานรวมในเดือน ──
-            st.markdown("---")
-            st.markdown(f"#### สรุปปริมาณงานรวม — {TH_MO[sel_mo]} {sel_yr}")
-            psum: dict = defaultdict(lambda: {"qty": 0.0, "unit": "", "workers": 0})
-            for r in rpts:
-                w = _i(r.get('workers', 0))
-                for it in r.get('items', []):
-                    qty = _f(it.get('qty', 0))
-                    if qty <= 0:
-                        continue
-                    pname = _proj_name(it['pid'])
-                    psum[pname]["qty"]     += qty
-                    psum[pname]["unit"]     = it.get('unit', '')
-                    psum[pname]["workers"] += w
-
-            if psum:
-                sum_rows = [{
-                    "ประเภทงาน":              pname,
-                    "หน่วย":                  v['unit'],
-                    "ปริมาณรวม":              round(v['qty'], 2),
-                    "Man-days รวม":           v['workers'],
-                    "Avg Productivity/คน/วัน": round(v['qty'] / v['workers'], 3) if v['workers'] else 0,
-                } for pname, v in psum.items()]
-                st.dataframe(pd.DataFrame(sum_rows), hide_index=True, use_container_width=True)
             else:
-                st.info("ยังไม่มีรายการงานที่บันทึกในเดือนนี้")
-
-    # ════════════════════════════════════════
-    # TAB: รายงวด
-    # ════════════════════════════════════════
-    with tab_period:
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            sel_yr2 = st.selectbox("ปี (พ.ศ.)", [now.year+543-i for i in range(4)],
-                                   key="pp_yr", format_func=lambda x: str(x))
-        with c2:
-            sel_mo2 = st.selectbox("เดือน", list(range(1, 13)), index=now.month - 1,
-                                   format_func=lambda x: TH_MO[x], key="pp_mo")
-        with c3:
-            sel_p = st.selectbox("งวด", [1, 2],
-                                 format_func=lambda x: f"งวดที่ {x} ({'1–15' if x==1 else '16–สิ้นเดือน'})",
-                                 key="pp_p")
-
-        yr_ad2 = sel_yr2 - 543
-        s_date, e_date = pdates(yr_ad2, sel_mo2, sel_p)
-        rpts2 = [r for r in DB['reports'] if s_date <= r['date'] <= e_date]
-
-        st.markdown(f"**ช่วงเวลา:** {thd(s_date)} – {thd(e_date)}")
-
-        if not rpts2:
-            st.info("ไม่มีข้อมูลในงวดที่เลือก")
-        else:
-            st.markdown(f"**จำนวนรายการ:** {len(rpts2)} รายการ")
-
-            # ── สรุปรายทีม ──
-            st.markdown("---")
-            st.markdown("#### 👥 สรุปรายทีม")
-            team_rows = []
-            for t in DB['teams']:
-                t_rpts = [r for r in rpts2 if r['teamId'] == t['id']]
-                if not t_rpts:
-                    continue
-                days          = len(t_rpts)
-                workers_total = sum(_i(r.get('workers', 0)) for r in t_rpts)
-                psum_t: dict  = defaultdict(lambda: {"qty": 0.0, "unit": ""})
-                for r in t_rpts:
-                    for it in r.get('items', []):
-                        qty = _f(it.get('qty', 0))
-                        if qty <= 0:
-                            continue
-                        pname = _proj_name(it['pid'])
-                        psum_t[pname]["qty"]  += qty
-                        psum_t[pname]["unit"]  = it.get('unit', '')
-                items_str = ", ".join(
-                    f"{k}: {round(v['qty'],1)} {v['unit']}" for k, v in psum_t.items()
-                ) or "—"
-                team_rows.append({
-                    "ทีม":           t['name'],
-                    "วันทำงาน":     days,
-                    "Man-days":      workers_total,
-                    "รายการงาน":   items_str,
+                rows.append({
+                    "วันที่":           thd(r['date']),
+                    "ทีม":              tname,
+                    "ประเภทการจ้าง":   ctname,
+                    "คนงาน (คน)":      workers,
+                    "ประเภทงาน":       "—",
+                    "ปริมาณ":          "—",
+                    "หน่วย":           "",
+                    "Prod/คน":         "—",
+                    "ต้นทุน (บาท)":   total if total else "—",
                 })
-            if team_rows:
-                st.dataframe(pd.DataFrame(team_rows), hide_index=True, use_container_width=True)
+        if rows:
+            st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
+        return rows
 
-            # ── สรุปตามประเภทงาน ──
+    def _render_summary(rpts_f, label):
+        """สรุปรายทีม + รายประเภทงาน + metrics"""
+        if not rpts_f:
+            st.info("ไม่มีข้อมูลในช่วงที่เลือก")
+            return
+
+        total_workers = sum(_i(r.get('workers', 0)) for r in rpts_f)
+        total_cost    = sum(_f(r.get('total', 0))   for r in rpts_f)
+        total_days    = len(set(r['date'] for r in rpts_f))
+        total_records = len(rpts_f)
+
+        mc1, mc2, mc3, mc4 = st.columns(4)
+        mc1.metric("📋 รายงาน", f"{total_records} รายการ")
+        mc2.metric("📅 วันทำงาน", f"{total_days} วัน")
+        mc3.metric("👷 Man-days รวม", f"{total_workers:,}")
+        mc4.metric("💰 ต้นทุนรวม", f"{total_cost:,.0f} ฿")
+
+        # ── สรุปรายทีม ──
+        st.markdown("---")
+        st.markdown("#### 👥 สรุปรายทีม")
+        team_summary: dict = defaultdict(lambda: {"days": set(), "workers": 0, "cost": 0.0,
+                                                   "items": defaultdict(lambda: {"qty": 0.0, "unit": ""})})
+        for r in rpts_f:
+            tid   = r['teamId']
+            tname = _team_name(tid)
+            team_summary[tname]["days"].add(r['date'])
+            team_summary[tname]["workers"] += _i(r.get('workers', 0))
+            team_summary[tname]["cost"]    += _f(r.get('total', 0))
+            for it in r.get('items', []):
+                qty = _f(it.get('qty', 0))
+                if qty > 0:
+                    pn = _proj_name(it['pid'])
+                    team_summary[tname]["items"][pn]["qty"]  += qty
+                    team_summary[tname]["items"][pn]["unit"]  = it.get('unit', '')
+
+        t_rows = []
+        for tname, v in team_summary.items():
+            items_str = ", ".join(
+                f"{k}: {round(v2['qty'],1)} {v2['unit']}"
+                for k, v2 in v["items"].items()
+            ) or "—"
+            t_rows.append({
+                "ทีม":                 tname,
+                "วันทำงาน":           len(v["days"]),
+                "Man-days รวม":        v["workers"],
+                "ต้นทุน (บาท)":       round(v["cost"], 0),
+                "รายการงาน":          items_str,
+            })
+        if t_rows:
+            st.dataframe(pd.DataFrame(t_rows), hide_index=True, use_container_width=True)
+
+        # ── สรุปตามประเภทงาน ──
+        st.markdown("---")
+        st.markdown("#### 🔧 สรุปตามประเภทงาน")
+        psum: dict = defaultdict(lambda: {"qty": 0.0, "unit": "", "workers": 0, "teams": set()})
+        for r in rpts_f:
+            w = _i(r.get('workers', 0))
+            for it in r.get('items', []):
+                qty = _f(it.get('qty', 0))
+                if qty <= 0:
+                    continue
+                pn = _proj_name(it['pid'])
+                psum[pn]["qty"]     += qty
+                psum[pn]["unit"]     = it.get('unit', '')
+                psum[pn]["workers"] += w
+                psum[pn]["teams"].add(_team_name(r['teamId']))
+        if psum:
+            p_rows = [{
+                "ประเภทงาน":              pn,
+                "หน่วย":                  v["unit"],
+                "ปริมาณรวม":              round(v["qty"], 2),
+                "Man-days รวม":           v["workers"],
+                "Productivity (หน่วย/คน)": round(v["qty"] / v["workers"], 3) if v["workers"] else 0,
+                "ทีมที่ทำ":               ", ".join(sorted(v["teams"])),
+            } for pn, v in psum.items()]
+            st.dataframe(pd.DataFrame(p_rows), hide_index=True, use_container_width=True)
+        else:
+            st.info("ยังไม่มีรายการงานที่บันทึก")
+
+    # ─── filter options ────────────────────────────────────────────────────
+    all_teams   = ["ทุกทีม"]  + [t['name'] for t in DB['teams']]
+    all_cts     = ["ทุกประเภทการจ้าง"] + [c['name'] for c in DB['contractTypes']]
+    all_projs   = ["ทุกประเภทงาน"]     + [p['name'] for p in DB['projects']]
+
+    tab_day, tab_range, tab_period = st.tabs(["📅 เลือกวัน", "📆 ช่วงวันที่", "📊 รายงวด"])
+
+    # ════════════════════════════════════════════════
+    # TAB 1: เลือกวันเดียว
+    # ════════════════════════════════════════════════
+    with tab_day:
+        fc1, fc2, fc3, fc4 = st.columns([1.2, 1.5, 1.5, 1.5])
+        with fc1:
+            day_sel = st.date_input("📅 วันที่", value=now, key="pday_date",
+                                    format="DD/MM/YYYY")
+        with fc2:
+            ft_day  = st.selectbox("👥 ทีม", all_teams, key="pday_team")
+        with fc3:
+            fct_day = st.selectbox("📋 ประเภทการจ้าง", all_cts, key="pday_ct")
+        with fc4:
+            fp_day  = st.selectbox("🔧 ประเภทงาน", all_projs, key="pday_proj")
+
+        day_str  = day_sel.isoformat()
+        rpts_day = [r for r in DB['reports'] if r['date'] == day_str]
+        rpts_day = _apply_filters(rpts_day, ft_day, fct_day, fp_day)
+
+        st.markdown(f"**{thd(day_str)}** — พบ {len(rpts_day)} รายงาน")
+        st.markdown("---")
+
+        if rpts_day:
+            _render_detail_table(rpts_day, fp_day)
             st.markdown("---")
-            st.markdown("#### 🔧 สรุปตามประเภทงาน")
-            psum2: dict = defaultdict(lambda: {"qty": 0.0, "unit": "", "workers": 0, "teams": set()})
-            for r in rpts2:
-                w = _i(r.get('workers', 0))
-                for it in r.get('items', []):
-                    qty = _f(it.get('qty', 0))
-                    if qty <= 0:
-                        continue
-                    pname = _proj_name(it['pid'])
-                    psum2[pname]["qty"]     += qty
-                    psum2[pname]["unit"]     = it.get('unit', '')
-                    psum2[pname]["workers"] += w
-                    psum2[pname]["teams"].add(_team_name(r['teamId']))
+            _render_summary(rpts_day, thd(day_str))
+        else:
+            st.info("ไม่มีข้อมูลในวันที่เลือก")
 
-            if psum2:
-                proj_rows = [{
-                    "ประเภทงาน":              pname,
-                    "หน่วย":                  v['unit'],
-                    "ปริมาณรวม":              round(v['qty'], 2),
-                    "Man-days รวม":           v['workers'],
-                    "Productivity (หน่วย/คน)": round(v['qty'] / v['workers'], 3) if v['workers'] else 0,
-                    "ทีมที่ทำ":               ", ".join(sorted(v['teams'])),
-                } for pname, v in psum2.items()]
-                st.dataframe(pd.DataFrame(proj_rows), hide_index=True, use_container_width=True)
+    # ════════════════════════════════════════════════
+    # TAB 2: ช่วงวันที่ (from–to)
+    # ════════════════════════════════════════════════
+    with tab_range:
+        rc1, rc2 = st.columns(2)
+        with rc1:
+            from_date = st.date_input("📅 จากวันที่", value=now.replace(day=1),
+                                      key="pr_from", format="DD/MM/YYYY")
+        with rc2:
+            to_date   = st.date_input("📅 ถึงวันที่", value=now,
+                                      key="pr_to",   format="DD/MM/YYYY")
+
+        rf1, rf2, rf3 = st.columns(3)
+        with rf1:
+            ft_rng  = st.selectbox("👥 ทีม", all_teams, key="pr_team")
+        with rf2:
+            fct_rng = st.selectbox("📋 ประเภทการจ้าง", all_cts, key="pr_ct")
+        with rf3:
+            fp_rng  = st.selectbox("🔧 ประเภทงาน", all_projs, key="pr_proj")
+
+        if from_date > to_date:
+            st.warning("⚠️ วันเริ่มต้นต้องไม่มากกว่าวันสิ้นสุด")
+        else:
+            fs  = from_date.isoformat()
+            fe  = to_date.isoformat()
+            rpts_rng = [r for r in DB['reports'] if fs <= r['date'] <= fe]
+            rpts_rng = _apply_filters(rpts_rng, ft_rng, fct_rng, fp_rng)
+
+            st.markdown(f"**{thd(fs)} – {thd(fe)}** — พบ {len(rpts_rng)} รายงาน")
+            st.markdown("---")
+
+            if rpts_rng:
+                with st.expander("📋 รายละเอียดรายวัน", expanded=False):
+                    _render_detail_table(rpts_rng, fp_rng)
+                st.markdown("---")
+                _render_summary(rpts_rng, f"{thd(fs)} – {thd(fe)}")
             else:
-                st.info("ยังไม่มีรายการงานที่บันทึกในงวดนี้")
+                st.info("ไม่มีข้อมูลในช่วงที่เลือก")
+
+    # ════════════════════════════════════════════════
+    # TAB 3: รายงวด (preset ครึ่งเดือน)
+    # ════════════════════════════════════════════════
+    with tab_period:
+        pc1, pc2, pc3 = st.columns(3)
+        with pc1:
+            sel_yr_p = st.selectbox("ปี (พ.ศ.)", [now.year+543-i for i in range(4)],
+                                    key="pp_yr", format_func=lambda x: str(x))
+        with pc2:
+            sel_mo_p = st.selectbox("เดือน", list(range(1, 13)), index=now.month - 1,
+                                    format_func=lambda x: TH_MO[x], key="pp_mo")
+        with pc3:
+            sel_pp   = st.selectbox("งวด", [1, 2],
+                                    format_func=lambda x: f"งวดที่ {x} ({'1–15' if x==1 else '16–สิ้นเดือน'})",
+                                    key="pp_p")
+
+        pf1, pf2, pf3 = st.columns(3)
+        with pf1:
+            ft_per  = st.selectbox("👥 ทีม", all_teams, key="pp_team")
+        with pf2:
+            fct_per = st.selectbox("📋 ประเภทการจ้าง", all_cts, key="pp_ct")
+        with pf3:
+            fp_per  = st.selectbox("🔧 ประเภทงาน", all_projs, key="pp_proj")
+
+        yr_ad_p = sel_yr_p - 543
+        ps_date, pe_date = pdates(yr_ad_p, sel_mo_p, sel_pp)
+        rpts_per = [r for r in DB['reports'] if ps_date <= r['date'] <= pe_date]
+        rpts_per = _apply_filters(rpts_per, ft_per, fct_per, fp_per)
+
+        period_lbl = f"งวดที่ {sel_pp} ({'1–15' if sel_pp==1 else '16–สิ้นเดือน'}) {TH_MO[sel_mo_p]} {sel_yr_p}"
+        st.markdown(f"**{period_lbl}** ({thd(ps_date)} – {thd(pe_date)}) — พบ {len(rpts_per)} รายงาน")
+        st.markdown("---")
+
+        if rpts_per:
+            with st.expander("📋 รายละเอียดรายวัน", expanded=False):
+                _render_detail_table(rpts_per, fp_per)
+            st.markdown("---")
+            _render_summary(rpts_per, period_lbl)
+        else:
+            st.info("ไม่มีข้อมูลในงวดที่เลือก")
