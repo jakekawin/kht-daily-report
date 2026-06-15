@@ -100,54 +100,27 @@ def _ws(sh, name):
     try: return sh.worksheet(name)
     except: return sh.add_worksheet(title=name, rows=2000, cols=20)
 
-# ─── GOOGLE DRIVE ──────────────────────────────────────
-DRIVE_PARENT_FOLDER = "KHT Report"
-DRIVE_PHOTO_FOLDER  = "Photoreport"
-
-@st.cache_resource
-def _drive_svc():
-    from googleapiclient.discovery import build
-    creds = Credentials.from_service_account_info(
-        st.secrets["gcp_service_account"],
-        scopes=["https://www.googleapis.com/auth/spreadsheets",
-                "https://www.googleapis.com/auth/drive"]
-    )
-    return build('drive', 'v3', credentials=creds, cache_discovery=False)
-
-def _folder_id(svc, name, parent_id=None):
-    q = (f"name='{name}'"
-         f" and mimeType='application/vnd.google-apps.folder'"
-         f" and trashed=false")
-    if parent_id: q += f" and '{parent_id}' in parents"
-    res = svc.files().list(q=q, fields="files(id)", pageSize=1).execute()
-    if res.get('files'):
-        return res['files'][0]['id']
-    meta = {'name': name, 'mimeType': 'application/vnd.google-apps.folder'}
-    if parent_id: meta['parents'] = [parent_id]
-    return svc.files().create(body=meta, fields='id').execute()['id']
-
+# ─── IMGBB PHOTO UPLOAD ────────────────────────────────
 def upload_photo(file_bytes, filename, date_str):
-    from googleapiclient.http import MediaIoBaseUpload
-    import io, mimetypes
-    svc       = _drive_svc()
-    parent_id = _folder_id(svc, DRIVE_PARENT_FOLDER)
-    photo_id  = _folder_id(svc, DRIVE_PHOTO_FOLDER, parent_id)
-    date_id   = _folder_id(svc, date_str, photo_id)
-    mime     = mimetypes.guess_type(filename)[0] or 'image/jpeg'
-    media    = MediaIoBaseUpload(io.BytesIO(file_bytes), mimetype=mime, resumable=False)
-    f = svc.files().create(
-        body={'name': filename, 'parents': [date_id]},
-        media_body=media, fields='id'
-    ).execute()
-    svc.permissions().create(
-        fileId=f['id'], body={'role': 'reader', 'type': 'anyone'}
-    ).execute()
-    fid = f['id']
+    import base64, requests
+    api_key = st.secrets.get("IMGBB_API_KEY", "")
+    if not api_key:
+        raise Exception("ไม่พบ IMGBB_API_KEY ใน secrets — กรุณาเพิ่มที่ Streamlit Cloud → Settings → Secrets")
+    b64 = base64.b64encode(file_bytes).decode()
+    resp = requests.post(
+        "https://api.imgbb.com/1/upload",
+        data={"key": api_key, "image": b64, "name": filename},
+        timeout=30,
+    )
+    data = resp.json()
+    if not data.get("success"):
+        raise Exception(data.get("error", {}).get("message", "อัปโหลดล้มเหลว"))
+    d = data["data"]
     return {
-        'id':    fid,
-        'url':   f"https://drive.google.com/uc?id={fid}",
-        'thumb': f"https://drive.google.com/thumbnail?id={fid}&sz=w400",
-        'name':  filename,
+        "id":    d["id"],
+        "url":   d["url"],
+        "thumb": d.get("thumb", {}).get("url") or d.get("medium", {}).get("url") or d["url"],
+        "name":  filename,
     }
 
 def load_db():
