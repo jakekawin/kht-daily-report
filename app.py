@@ -488,7 +488,7 @@ elif PAGE == "add" and can_edit:
             st.session_state.photos.pop(_to_rm_ph); st.rerun()
     _upload_key = st.session_state.get('upload_key', 0)
     new_photos = st.file_uploader(
-        "📷 แนบรูปภาพ (อัปโหลดไป Google Drive อัตโนมัติเมื่อบันทึก)",
+        "📷 แนบรูปภาพ (อัปโหลดอัตโนมัติเมื่อบันทึก)",
         type=['jpg', 'jpeg', 'png', 'webp'],
         accept_multiple_files=True,
         key=f"photo_upload_{_upload_key}",
