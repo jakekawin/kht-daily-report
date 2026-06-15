@@ -1,0 +1,32 @@
+name: KHT LINE Daily Reminder
+
+on:
+  schedule:
+    # 15:00 Bangkok (UTC+7) = 08:00 UTC  |  วันจันทร์–เสาร์
+    - cron: '0 8 * * 1-6'
+  workflow_dispatch:   # กดรันเองได้ใน GitHub Actions tab (สำหรับ test)
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install gspread google-auth requests
+
+      - name: Run notifier
+        env:
+          GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+          LINE_CHANNEL_TOKEN: ${{ secrets.LINE_CHANNEL_TOKEN }}
+          LINE_GROUP_ID:      ${{ secrets.LINE_GROUP_ID }}
+          SHEET_ID:           ${{ secrets.SHEET_ID }}
+        run: python notify.py
