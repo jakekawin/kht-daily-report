@@ -484,7 +484,10 @@ if PAGE == "dashboard":
     active_teams   = [t for t in DB['teams'] if str(t.get('active','1')) != '0']
     submitted_tids = {r['teamId'] for r in sel_rpts}
     missing_teams  = [t for t in active_teams if t['id'] not in submitted_tids]
-    col_miss, col_met1, col_met2 = st.columns([2,1,1])
+    n_submitted    = len(active_teams) - len(missing_teams)
+    pct_submit     = int(n_submitted / len(active_teams) * 100) if active_teams else 0
+
+    col_miss, col_met1, col_met2, col_met3 = st.columns([2.5, 1, 1, 1])
     with col_miss:
         if missing_teams:
             names_str = " · ".join(f"🔴 {t['name']}" for t in missing_teams)
@@ -499,9 +502,86 @@ if PAGE == "dashboard":
                 f"padding:10px 14px;border-radius:6px;font-size:0.9rem'>"
                 f"✅ <b>ทุกทีมส่งรายงาน{lbl_date}แล้ว</b></div>",
                 unsafe_allow_html=True)
-    with col_met1: st.metric("👥 ทีม Online",   len(active_teams))
-    with col_met2: st.metric("🔧 ประเภทงาน Online", len([p for p in DB['projects'] if str(p.get('active','1')) != '0']))
+    with col_met1: st.metric("✅ ส่งรายงาน", f"{n_submitted}/{len(active_teams)} ทีม",
+                              f"{pct_submit}%")
+    with col_met2: st.metric("👥 ทีม Online", len(active_teams))
+    with col_met3: st.metric("🔧 ประเภทงาน", len([p for p in DB['projects'] if str(p.get('active','1')) != '0']))
 
+    # ── Burn Rate + Period Progress (Admin) ──────────────
+    if can_see_money:
+        st.markdown("---")
+        eday_p  = 15 if p_cur == 1 else calendar.monthrange(sd_yr, sd_mo)[1]
+        sday_p  = 1  if p_cur == 1 else 16
+        days_el = max(sd_dy - sday_p + 1, 1)
+        days_tot= eday_p - sday_p + 1
+        pct_pgr = min(days_el / days_tot * 100, 100)
+        cost_pd = period_tot / days_el if days_el else 0
+        # week cost vs prev week
+        wk_s    = sel_date - timedelta(days=6)
+        wk_ps   = wk_s    - timedelta(days=7)
+        wk_pe   = wk_s    - timedelta(days=1)
+        wk_cost = sum(_f(r['total']) for r in DB['reports']
+                      if wk_s.isoformat() <= r['date'] <= sel_str)
+        wk_prev = sum(_f(r['total']) for r in DB['reports']
+                      if wk_ps.isoformat() <= r['date'] <= wk_pe.isoformat())
+        delta_w = wk_cost - wk_prev
+        period_manday = sum(_i(r['workers']) for r in period_rpts)
+        cpmd    = period_tot / period_manday if period_manday else 0
+
+        bk1, bk2, bk3, bk4 = st.columns(4)
+        with bk1:
+            st.metric("⏱️ ผ่านไปในงวด",
+                      f"{days_el}/{days_tot} วัน",
+                      f"{pct_pgr:.0f}% ของงวด")
+        with bk2:
+            st.metric("💸 เฉลี่ย/วัน (งวดนี้)", f"฿ {N(cost_pd)}")
+        with bk3:
+            st.metric("📊 สัปดาห์นี้ (7 วัน)",
+                      f"฿ {N(wk_cost)}",
+                      f"{'+' if delta_w >= 0 else ''}{N(delta_w)} vs สัปดาห์ก่อน",
+                      delta_color="inverse")
+        with bk4:
+            st.metric("👷 ฿/Man-day (งวดนี้)", f"฿ {N(cpmd)}")
+
+    # ── 14-day Cost Bar Chart (Admin) ────────────────────
+    if can_see_money:
+        st.markdown("---")
+        st.markdown("#### 📊 ต้นทุนย้อนหลัง 14 วัน")
+        dates_14  = [(sel_date - timedelta(days=i)).isoformat() for i in range(13, -1, -1)]
+        costs_14  = [sum(_f(r['total']) for r in DB['reports'] if r['date'] == d) for d in dates_14]
+        labels_14 = [f"{d[8:]}/{d[5:7]}" for d in dates_14]
+        chart14   = pd.DataFrame({"วันที่": labels_14, "ต้นทุน (฿)": costs_14}).set_index("วันที่")
+        st.bar_chart(chart14)
+
+    # ── Team Leaderboard งวดนี้ ─────────────────────────
+    st.markdown("---")
+    st.markdown(f"#### 🏆 สถิติทีม — งวดที่ {p_cur}")
+    team_stats = []
+    for t in active_teams:
+        tot_t   = period_total(t['id'], sd_yr, sd_mo, p_cur)
+        rpts_t  = [r for r in period_rpts if r['teamId'] == t['id']]
+        manday_t= sum(_i(r['workers']) for r in rpts_t)
+        days_t  = len(rpts_t)
+        cpmd_t  = round(tot_t / manday_t, 0) if manday_t else 0
+        sub_today = "✅" if t['id'] in submitted_tids else "⏳"
+        row_t = {
+            "ทีม":           t['name'],
+            "ส่งวันนี้":     sub_today,
+            "วันทำงาน":     days_t,
+            "Man-days":      manday_t,
+        }
+        if can_see_money:
+            row_t["ต้นทุนงวดนี้ (฿)"] = round(tot_t, 0)
+            row_t["฿/Man-day"]         = cpmd_t
+        team_stats.append(row_t)
+    if can_see_money:
+        team_stats.sort(key=lambda x: x.get("ต้นทุนงวดนี้ (฿)", 0), reverse=True)
+    else:
+        team_stats.sort(key=lambda x: x.get("Man-days", 0), reverse=True)
+    if team_stats:
+        st.dataframe(pd.DataFrame(team_stats), hide_index=True, use_container_width=True)
+
+    # ── รายละเอียดผลงานวันที่เลือก ──────────────────────
     st.markdown("---")
     st.markdown(f"#### 📋 ผลงาน{lbl_date}")
     if not sel_rpts:
@@ -1595,7 +1675,7 @@ elif PAGE == "productivity":
     all_cts     = ["ทุกประเภทการจ้าง"] + [c['name'] for c in DB['contractTypes']]
     all_projs   = ["ทุกประเภทงาน"]     + [p['name'] for p in DB['projects']]
 
-    tab_day, tab_range, tab_period = st.tabs(["📅 เลือกวัน", "📆 ช่วงวันที่", "📊 รายงวด"])
+    tab_day, tab_range, tab_period, tab_trend = st.tabs(["📅 เลือกวัน", "📆 ช่วงวันที่", "📊 รายงวด", "📈 Trend"])
 
     # ════════════════════════════════════════════════
     # TAB 1: เลือกวันเดียว
@@ -1705,3 +1785,69 @@ elif PAGE == "productivity":
             _render_summary(rpts_per, period_lbl, fp_per)
         else:
             st.info("ไม่มีข้อมูลในงวดที่เลือก")
+
+    # ════════════════════════════════════════════════
+    # TAB 4: Trend — รายสัปดาห์
+    # ════════════════════════════════════════════════
+    with tab_trend:
+        from datetime import timedelta
+
+        st.markdown("#### 📈 แนวโน้มรายสัปดาห์ (8 สัปดาห์ย้อนหลัง)")
+
+        # ── filter ──
+        tf1, tf2 = st.columns([1.5, 1.5])
+        with tf1:
+            ft_trend = st.selectbox("👥 ทีม", all_teams, key="pt_team")
+        with tf2:
+            fct_trend = st.selectbox("📋 ประเภทการจ้าง", all_cts, key="pt_ct")
+
+        # ── build 8-week buckets ──
+        WEEKS = 8
+        today_td = date.today()
+        # วันจันทร์ของสัปดาห์นี้
+        monday_this = today_td - timedelta(days=today_td.weekday())
+
+        wk_labels, wk_costs, wk_mandays = [], [], []
+        for i in range(WEEKS - 1, -1, -1):
+            wk_start = monday_this - timedelta(weeks=i)
+            wk_end   = wk_start + timedelta(days=6)
+            wk_rpts  = [r for r in DB['reports']
+                        if wk_start.isoformat() <= r['date'] <= wk_end.isoformat()]
+            wk_rpts  = _apply_filters(wk_rpts, ft_trend, fct_trend, "ทุกประเภทงาน")
+            wk_cost  = sum(_f(r.get('total', 0)) for r in wk_rpts)
+            wk_md    = sum(_i(r.get('workers', 0)) for r in wk_rpts)
+            label    = f"W{wk_start.strftime('%d/%m')}"
+            wk_labels.append(label)
+            wk_costs.append(round(wk_cost, 0))
+            wk_mandays.append(wk_md)
+
+        wk_cpmd = [round(wk_costs[i] / wk_mandays[i], 0) if wk_mandays[i] else 0
+                   for i in range(WEEKS)]
+
+        # ── Chart 1: Cost per week ──
+        if can_see_money:
+            st.markdown("**💸 ต้นทุนรวมรายสัปดาห์ (฿)**")
+            cost_df = pd.DataFrame({"สัปดาห์": wk_labels, "ต้นทุน (฿)": wk_costs}).set_index("สัปดาห์")
+            st.bar_chart(cost_df)
+
+        # ── Chart 2: Man-days per week ──
+        st.markdown("**👷 Man-days รายสัปดาห์**")
+        md_df = pd.DataFrame({"สัปดาห์": wk_labels, "Man-days": wk_mandays}).set_index("สัปดาห์")
+        st.bar_chart(md_df)
+
+        # ── Chart 3: ฿/Man-day trend (admin) ──
+        if can_see_money:
+            st.markdown("**📊 ฿/Man-day รายสัปดาห์**")
+            cpmd_df = pd.DataFrame({"สัปดาห์": wk_labels, "฿/Man-day": wk_cpmd}).set_index("สัปดาห์")
+            st.line_chart(cpmd_df)
+
+        # ── Summary table ──
+        with st.expander("📋 ตารางสรุปรายสัปดาห์", expanded=False):
+            rows_t = []
+            for i in range(WEEKS):
+                row_t = {"สัปดาห์": wk_labels[i], "Man-days": wk_mandays[i]}
+                if can_see_money:
+                    row_t["ต้นทุน (฿)"]  = wk_costs[i]
+                    row_t["฿/Man-day"] = wk_cpmd[i]
+                rows_t.append(row_t)
+            st.dataframe(pd.DataFrame(rows_t), hide_index=True, use_container_width=True)
