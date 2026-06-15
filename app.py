@@ -1,12 +1,13 @@
 import streamlit as st
 import json, calendar
 from datetime import date, datetime
+from collections import defaultdict
 import uuid
 import pandas as pd
 import gspread
 from google.oauth2.service_account import Credentials
 
-# ─── PAGE CONFIG ────────────────────────────────────
+# ─── PAGE CONFIG ─────────────────────────────────────
 st.set_page_config(
     page_title="KHT Daily Report",
     page_icon="⛑️",
@@ -27,8 +28,9 @@ SHEET_HEADERS = {
     "teams":         ["id", "name", "contractTypeId", "note"],
     "contractTypes": ["id", "name", "calcMode", "manRate"],
     "projects":      ["id", "name", "unit", "unitRate", "description"],
-    "reports":       ["id", "date", "teamId", "workers", "note", "items", "total"],
+    "reports":       ["id", "date", "teamId", "workers", "note", "items", "posItems", "photos", "total"],
     "payments":      ["id", "tid", "y", "mo", "p", "paid", "paidDate", "note"],
+    "positions":     ["id", "name", "dailyRate"],
 }
 CALC_MODES = {"unit_rate": "คิดตาม Unit Rate (ปริมาณ × ราคา)",
               "by_workers": "คิดตามจำนวนคน (คน × เรท)"}
@@ -98,6 +100,56 @@ def _ws(sh, name):
     try: return sh.worksheet(name)
     except: return sh.add_worksheet(title=name, rows=2000, cols=20)
 
+# ─── GOOGLE DRIVE ──────────────────────────────────────
+DRIVE_PARENT_FOLDER = "KHT Report"
+DRIVE_PHOTO_FOLDER  = "Photoreport"
+
+@st.cache_resource
+def _drive_svc():
+    from googleapiclient.discovery import build
+    creds = Credentials.from_service_account_info(
+        st.secrets["gcp_service_account"],
+        scopes=["https://www.googleapis.com/auth/spreadsheets",
+                "https://www.googleapis.com/auth/drive"]
+    )
+    return build('drive', 'v3', credentials=creds, cache_discovery=False)
+
+def _folder_id(svc, name, parent_id=None):
+    q = (f"name='{name}'"
+         f" and mimeType='application/vnd.google-apps.folder'"
+         f" and trashed=false")
+    if parent_id: q += f" and '{parent_id}' in parents"
+    res = svc.files().list(q=q, fields="files(id)", pageSize=1).execute()
+    if res.get('files'):
+        return res['files'][0]['id']
+    meta = {'name': name, 'mimeType': 'application/vnd.google-apps.folder'}
+    if parent_id: meta['parents'] = [parent_id]
+    return svc.files().create(body=meta, fields='id').execute()['id']
+
+def upload_photo(file_bytes, filename, date_str):
+    from googleapiclient.http import MediaIoBaseUpload
+    import io, mimetypes
+    svc       = _drive_svc()
+    parent_id = _folder_id(svc, DRIVE_PARENT_FOLDER)
+    photo_id  = _folder_id(svc, DRIVE_PHOTO_FOLDER, parent_id)
+    date_id   = _folder_id(svc, date_str, photo_id)
+    mime     = mimetypes.guess_type(filename)[0] or 'image/jpeg'
+    media    = MediaIoBaseUpload(io.BytesIO(file_bytes), mimetype=mime, resumable=False)
+    f = svc.files().create(
+        body={'name': filename, 'parents': [date_id]},
+        media_body=media, fields='id'
+    ).execute()
+    svc.permissions().create(
+        fileId=f['id'], body={'role': 'reader', 'type': 'anyone'}
+    ).execute()
+    fid = f['id']
+    return {
+        'id':    fid,
+        'url':   f"https://drive.google.com/uc?id={fid}",
+        'thumb': f"https://drive.google.com/thumbnail?id={fid}&sz=w400",
+        'name':  filename,
+    }
+
 def load_db():
     try:
         gc = get_gc()
@@ -110,6 +162,7 @@ def load_db():
         contractTypes = rws("contractTypes")
         projects      = rws("projects")
         payments      = rws("payments")
+        positions     = rws("positions")
 
         for p in projects:
             p['unitRate'] = _f(p.get('unitRate', 0))
@@ -125,6 +178,10 @@ def load_db():
             rec = dict(r)
             try: rec['items'] = json.loads(rec.get('items') or '[]')
             except: rec['items'] = []
+            try: rec['posItems'] = json.loads(rec.get('posItems') or '[]')
+            except: rec['posItems'] = []
+            try: rec['photos'] = json.loads(rec.get('photos') or '[]')
+            except: rec['photos'] = []
             rec['workers'] = _i(rec.get('workers', 0))
             rec['total']   = _f(rec.get('total', 0))
             for it in rec['items']:
@@ -133,11 +190,16 @@ def load_db():
                 it['rate'] = _f(it.get('rate', 0))
             reports.append(rec)
 
+        for pos in positions:
+            pos['dailyRate'] = _f(pos.get('dailyRate', 0))
+
         return {"teams": teams, "contractTypes": contractTypes,
-                "projects": projects, "reports": reports, "payments": payments}
+                "projects": projects, "reports": reports,
+                "payments": payments, "positions": positions}
     except Exception as e:
         st.error(f"❌ โหลดข้อมูลไม่ได้: {e}")
-        return {"teams": [], "projects": [], "reports": [], "payments": []}
+        return {"teams": [], "projects": [], "reports": [], "payments": [],
+                "contractTypes": [], "positions": []}
 
 def save_db(tables=None):
     try:
@@ -155,7 +217,7 @@ def save_db(tables=None):
                 row = []
                 for h in headers:
                     val = item.get(h, '')
-                    if h == 'items' and isinstance(val, list):
+                    if isinstance(val, list):
                         val = json.dumps(val, ensure_ascii=False)
                     if isinstance(val, bool): val = str(val).upper()
                     if val is None: val = ''
@@ -233,7 +295,8 @@ def login_page():
 
 # ─── SESSION STATE INIT ───────────────────────────────
 for k, v in [('logged_in', False), ('role', None), ('wi', []),
-              ('edit_id', None), ('page_key', None)]:
+              ('pos_items', []), ('photos', []), ('upload_key', 0),
+              ('_photo_edit', None), ('edit_id', None), ('page_key', None)]:
     if k not in st.session_state:
         st.session_state[k] = v
 
@@ -260,6 +323,7 @@ pages_map["📊 Dashboard"]           = "dashboard"
 if can_edit:    pages_map["➕ บันทึกงานประจำวัน"] = "add"
 pages_map["🔍 ดูข้อมูลรายวัน"]      = "view"
 if can_summary: pages_map["📈 สรุปรายงวด"]       = "summary"
+if can_edit:    pages_map["📉 Productivity"]       = "productivity"
 if can_settings:pages_map["⚙️ ตั้งค่าระบบ"]      = "settings"
 
 # Validate stored page_key
@@ -306,22 +370,35 @@ with st.sidebar:
 if PAGE == "dashboard":
     now  = date.today()
     yr, mo, dy = now.year, now.month, now.day
-    p_cur = 1 if dy <= 15 else 2
-    ps, pe = pdates(yr, mo, p_cur)
-    ms = f"{yr}-{str(mo).zfill(2)}-01"
-    me = f"{yr}-{str(mo).zfill(2)}-31"
-    today = today_str()
 
-    period_lbl = f"งวดที่ {p_cur}: {'1–15' if p_cur==1 else '16–สิ้นเดือน'} {TH_MO[mo]} {yr+543}"
+    # ── Date picker: เลือกวันที่ดู (default = วันนี้) ──
+    dh1, dh2 = st.columns([1, 3])
+    with dh1:
+        sel_date = st.date_input("📅 เลือกวันที่", value=now, label_visibility="collapsed",
+                                 key="dash_date")
+    with dh2:
+        is_today = (sel_date == now)
+        lbl_date = "วันนี้" if is_today else thd(sel_date.isoformat())
+        st.markdown(f"<div style='padding-top:0.5rem;color:#555'>ดูข้อมูลวันที่ <b>{lbl_date}</b></div>",
+                    unsafe_allow_html=True)
+
+    sd_yr, sd_mo, sd_dy = sel_date.year, sel_date.month, sel_date.day
+    p_cur = 1 if sd_dy <= 15 else 2
+    ps, pe = pdates(sd_yr, sd_mo, p_cur)
+    ms = f"{sd_yr}-{str(sd_mo).zfill(2)}-01"
+    me = f"{sd_yr}-{str(sd_mo).zfill(2)}-31"
+    sel_str = sel_date.isoformat()
+
+    period_lbl = f"งวดที่ {p_cur}: {'1–15' if p_cur==1 else '16–สิ้นเดือน'} {TH_MO[sd_mo]} {sd_yr+543}"
     st.markdown(f"### 📊 Dashboard &nbsp;<span style='font-size:0.85rem;color:#777'>{period_lbl}</span>",
                 unsafe_allow_html=True)
 
-    today_rpts  = [r for r in DB['reports'] if r['date'] == today]
+    sel_rpts    = [r for r in DB['reports'] if r['date'] == sel_str]
     period_rpts = [r for r in DB['reports'] if ps <= r['date'] <= pe]
     month_rpts  = [r for r in DB['reports'] if ms <= r['date'] <= me]
 
     if can_see_money:
-        today_tot  = sum(_f(r['total']) for r in today_rpts)
+        sel_tot    = sum(_f(r['total']) for r in sel_rpts)
         period_tot = sum(_f(r['total']) for r in period_rpts)
         month_tot  = sum(_f(r['total']) for r in month_rpts)
         unpaid = sum(
@@ -330,15 +407,15 @@ if PAGE == "dashboard":
             if not (lambda pay: pay and pay.get('paid'))(get_payment(t['id'],yr,mo,p))
         )
         c1,c2,c3,c4 = st.columns(4)
-        with c1: st.metric("📅 ยอดวันนี้",   f"฿ {N(today_tot)}")
-        with c2: st.metric("📆 ยอดงวดนี้",   f"฿ {N(period_tot)}")
-        with c3: st.metric("🗓️ ยอดเดือนนี้", f"฿ {N(month_tot)}")
-        with c4: st.metric("⚠️ ค้างชำระ",    f"฿ {N(unpaid)}")
+        with c1: st.metric(f"📅 ยอด{lbl_date}",  f"฿ {N(sel_tot)}")
+        with c2: st.metric("📆 ยอดงวดนี้",        f"฿ {N(period_tot)}")
+        with c3: st.metric("🗓️ ยอดเดือนนี้",      f"฿ {N(month_tot)}")
+        with c4: st.metric("⚠️ ค้างชำระ",          f"฿ {N(unpaid)}")
     else:
         c1,c2,c3 = st.columns(3)
-        with c1: st.metric("📅 รายงานวันนี้",    f"{len(today_rpts)} รายการ")
-        with c2: st.metric("📆 รายงานงวดนี้",    f"{len(period_rpts)} รายการ")
-        with c3: st.metric("🗓️ รายงานเดือนนี้",  f"{len(month_rpts)} รายการ")
+        with c1: st.metric(f"📅 รายงาน{lbl_date}",  f"{len(sel_rpts)} รายการ")
+        with c2: st.metric("📆 รายงานงวดนี้",         f"{len(period_rpts)} รายการ")
+        with c3: st.metric("🗓️ รายงานเดือนนี้",       f"{len(month_rpts)} รายการ")
 
     st.markdown("---")
     ca, cb = st.columns(2)
@@ -346,12 +423,12 @@ if PAGE == "dashboard":
     with cb: st.metric("🔧 ประเภทงาน", len(DB['projects']))
 
     st.markdown("---")
-    st.markdown("#### 📋 ผลงานวันนี้")
-    if not today_rpts:
-        st.info("ยังไม่มีข้อมูลวันนี้")
+    st.markdown(f"#### 📋 ผลงาน{lbl_date}")
+    if not sel_rpts:
+        st.info(f"ไม่มีข้อมูล{lbl_date}")
     else:
         rows = []
-        for r in today_rpts:
+        for r in sel_rpts:
             items_str = " | ".join(
                 f"{get_proj(it['pid'])['name']}: {it['qty']} {it['unit']}"
                 + (f" = {N(it['amt'])}฿" if can_see_money else "")
@@ -374,6 +451,19 @@ elif PAGE == "add" and can_edit:
         edit_rec = next((r for r in DB['reports'] if r['id']==st.session_state.edit_id), None)
         if edit_rec and not st.session_state.wi:
             st.session_state.wi = [dict(i) for i in edit_rec['items']]
+        if edit_rec and not st.session_state.pos_items:
+            _raw_pi = edit_rec.get('posItems', [])
+            if isinstance(_raw_pi, str):
+                try: _raw_pi = json.loads(_raw_pi or '[]')
+                except: _raw_pi = []
+            st.session_state.pos_items = [dict(i) for i in _raw_pi if isinstance(i, dict)]
+        if edit_rec and st.session_state.get('_photo_edit') != st.session_state.edit_id:
+            _raw_ph = edit_rec.get('photos', [])
+            if isinstance(_raw_ph, str):
+                try: _raw_ph = json.loads(_raw_ph or '[]')
+                except: _raw_ph = []
+            st.session_state.photos = [dict(p) for p in _raw_ph if isinstance(p, dict)]
+            st.session_state['_photo_edit'] = st.session_state.edit_id
         if edit_rec:
             st.info(f"✏️ กำลังแก้ไข: {thd(edit_rec['date'])} — {get_team(edit_rec['teamId'])['name']}")
 
@@ -389,28 +479,137 @@ elif PAGE == "add" and can_edit:
         def_ti = tids.index(edit_rec['teamId']) if edit_rec and edit_rec['teamId'] in tids else 0
         r_tname = st.selectbox("👥 ทีมผู้รับเหมา *", tnames, index=def_ti)
         r_tid   = tids[tnames.index(r_tname)]
-    with col3:
-        r_workers = st.number_input("🧑‍🔧 จำนวนคนงาน *", min_value=0,
-                                    value=_i(edit_rec['workers']) if edit_rec else 0)
-    r_note = st.text_input("📝 หมายเหตุ", value=edit_rec.get('note','') if edit_rec else '')
+    # ── Determine calc mode before col3 (needs r_tid already set in col2) ──
+    _team_obj_pre = get_team(r_tid)
+    _team_ct_pre  = get_contract_type(_team_obj_pre.get('contractTypeId', ''))
+    calc_mode_pre = _team_ct_pre.get('calcMode', 'unit_rate')
 
-    # ── Determine calc mode from team's contract type ──
-    team_obj  = get_team(r_tid)
-    team_ct   = get_contract_type(team_obj.get('contractTypeId',''))
-    calc_mode = team_ct.get('calcMode', 'unit_rate')
+    with col3:
+        if calc_mode_pre == 'by_workers':
+            st.caption("🧑‍🔧 คนงานรวม")
+            workers_display = st.empty()
+            r_workers = 0
+        else:
+            r_workers = st.number_input("🧑‍🔧 จำนวนคนงาน *", min_value=0,
+                                        value=_i(edit_rec['workers']) if edit_rec else 0)
+    r_note = st.text_area("📝 รายงานการทำงาน",
+                          value=edit_rec.get('note','') if edit_rec else '',
+                          height=90,
+                          placeholder="บันทึกรายละเอียดการทำงานประจำวัน...")
+
+    # ── รูปภาพ ─────────────────────────────────────────
+    if st.session_state.photos:
+        st.markdown("**📷 รูปภาพที่แนบไว้**")
+        _ph_cols = st.columns(min(len(st.session_state.photos), 3))
+        _to_rm_ph = None
+        for _i_ph, _ph in enumerate(st.session_state.photos):
+            with _ph_cols[_i_ph % 3]:
+                try:
+                    st.image(_ph.get('thumb', _ph.get('url','')), use_container_width=True)
+                except:
+                    st.caption(_ph.get('name', f"รูป {_i_ph+1}"))
+                st.caption(_ph.get('name',''))
+                if st.button("🗑️ ลบ", key=f"rmph_{_i_ph}"):
+                    _to_rm_ph = _i_ph
+        if _to_rm_ph is not None:
+            st.session_state.photos.pop(_to_rm_ph); st.rerun()
+    _upload_key = st.session_state.get('upload_key', 0)
+    new_photos = st.file_uploader(
+        "📷 แนบรูปภาพ (อัปโหลดไป Google Drive อัตโนมัติเมื่อบันทึก)",
+        type=['jpg', 'jpeg', 'png', 'webp'],
+        accept_multiple_files=True,
+        key=f"photo_upload_{_upload_key}",
+    )
+
+    # ── Recheck: ตรวจว่ามีรายงานสำหรับวัน+ทีมนี้อยู่แล้วหรือยัง ──
+    if not st.session_state.edit_id:
+        existing = next((r for r in DB['reports']
+                         if r['date'] == r_date.isoformat() and r['teamId'] == r_tid), None)
+        if existing:
+            st.warning(
+                f"⚠️ มีรายงานของ **{r_tname}** วันที่ **{thd(r_date.isoformat())}** อยู่แล้ว",
+                icon="⚠️"
+            )
+            if st.button("✏️ โหลดเพื่อแก้ไขรายงานนี้", type="secondary"):
+                st.session_state.edit_id = existing['id']
+                st.session_state.wi = []
+                st.session_state.pos_items = []
+                st.session_state.photos = []
+                st.session_state['_photo_edit'] = None
+                st.rerun()
+
+    # ── Use precomputed calc mode ──
+    team_obj  = _team_obj_pre
+    team_ct   = _team_ct_pre
+    calc_mode = calc_mode_pre
     man_rate  = _f(team_ct.get('manRate', 0))
 
     st.markdown("---")
 
     if calc_mode == 'by_workers':
-        # ── By-workers mode: total = workers × man_rate, items tracked for productivity ──
-        auto_total = int(r_workers) * man_rate
-        if can_see_money:
-            st.info(f"📋 **{team_ct['name']}** — คิดตามจำนวนคน | Man Rate: ฿{N(man_rate)}/คน | "
-                    f"รวม: ฿{N(auto_total)}")
-        else:
-            st.info(f"📋 **{team_ct['name']}** — คิดตามจำนวนคน")
+        # ── Position-based cost: Σ(count × dailyRate) ──
+        positions_list = DB.get('positions', [])
+        pnames_pos     = [p['name'] for p in positions_list]
+        pids_pos       = [p['id']   for p in positions_list]
 
+        if not positions_list:
+            st.warning("⚠️ ยังไม่มีตำแหน่งงาน — ขอให้ Admin เพิ่มในหน้าตั้งค่าระบบ > ตำแหน่งงาน")
+        else:
+            st.markdown("")
+            st.markdown("**👷 ตำแหน่งงานและจำนวนคน**")
+            to_rm_pos = None
+
+            for idx, pi in enumerate(st.session_state.pos_items):
+                pc1, pc2, pc3, pc4 = st.columns([3, 1.5, 1.2, 0.5])
+                with pc1:
+                    cur_pos_i = pids_pos.index(pi['posId']) if pi.get('posId') in pids_pos else 0
+                    sel_pos = st.selectbox(f"ตำแหน่ง#{idx+1}", pnames_pos, index=cur_pos_i,
+                                           key=f"possel_{idx}", label_visibility="collapsed")
+                    sp2 = positions_list[pnames_pos.index(sel_pos)]
+                    pi['posId']    = sp2['id']
+                    pi['posName']  = sp2['name']
+                    pi['dailyRate'] = sp2['dailyRate']
+                with pc2:
+                    if can_see_money:
+                        st.text_input("Rate/วัน", value=f"฿{N(pi['dailyRate'])}", disabled=True,
+                                      key=f"posrate_{idx}", label_visibility="collapsed")
+                with pc3:
+                    pi['count'] = st.number_input("จำนวนคน", min_value=0,
+                                                  value=int(pi.get('count', 1)),
+                                                  step=1, key=f"poscount_{idx}",
+                                                  label_visibility="collapsed")
+                with pc4:
+                    if st.button("🗑️", key=f"posdel_{idx}"): to_rm_pos = idx
+
+            if to_rm_pos is not None:
+                st.session_state.pos_items.pop(to_rm_pos); st.rerun()
+
+            ab2, _ = st.columns([1.8, 5])
+            with ab2:
+                if st.button("➕ เพิ่มตำแหน่งงาน"):
+                    fp2 = positions_list[0]
+                    st.session_state.pos_items.append({
+                        'posId': fp2['id'], 'posName': fp2['name'],
+                        'dailyRate': fp2['dailyRate'], 'count': 1
+                    })
+                    st.rerun()
+
+        # ── Compute totals ──
+        r_workers  = sum(int(pi.get('count', 0)) for pi in st.session_state.pos_items)
+        auto_total = sum(int(pi.get('count', 0)) * _f(pi.get('dailyRate', 0))
+                         for pi in st.session_state.pos_items)
+
+        # Update col3 placeholder
+        if st.session_state.pos_items:
+            workers_display.metric("คนงานรวม", f"{r_workers} คน", label_visibility="collapsed")
+
+        if can_see_money and st.session_state.pos_items:
+            st.info(f"📋 **{team_ct['name']}** — คิดตามตำแหน่งงาน | "
+                    f"คนงานรวม: **{r_workers} คน** | รวม: **฿{N(auto_total)}**")
+        elif st.session_state.pos_items:
+            st.info(f"📋 **{team_ct['name']}** — คิดตามตำแหน่งงาน | คนงานรวม: **{r_workers} คน**")
+
+        st.markdown("")
         st.markdown("**📋 รายการงาน (สำหรับติดตาม Productivity)**")
         if not DB['projects']:
             st.warning("ยังไม่มีประเภทงาน — ขอให้ Admin เพิ่มก่อน")
@@ -453,24 +652,41 @@ elif PAGE == "add" and can_edit:
                     st.rerun()
 
         st.markdown("---")
-        s1,s2,_ = st.columns([1.2,1,5])
+        s1, s2, _ = st.columns([1.2, 1, 5])
         with s1: save_btn = st.button("💾 บันทึกข้อมูล", type="primary", use_container_width=True)
         with s2:
             if st.button("🗑️ ล้างข้อมูล", use_container_width=True):
-                st.session_state.wi = []; st.session_state.edit_id = None; st.rerun()
+                st.session_state.wi = []
+                st.session_state.pos_items = []
+                st.session_state.photos = []
+                st.session_state['_photo_edit'] = None
+                st.session_state['upload_key'] = st.session_state.get('upload_key', 0) + 1
+                st.session_state.edit_id = None
+                st.rerun()
 
         if save_btn:
-            if int(r_workers) <= 0:
-                st.error("กรุณาระบุจำนวนคนงาน")
+            if r_workers <= 0:
+                st.error("กรุณาระบุตำแหน่งงานอย่างน้อย 1 ตำแหน่ง และจำนวนคนงาน")
             else:
+                _rid = st.session_state.edit_id or uid()
+                if new_photos:
+                    with st.spinner(f"กำลังอัปโหลดรูปภาพ {len(new_photos)} รูป..."):
+                        for _uf in new_photos:
+                            try:
+                                _ph = upload_photo(_uf.getvalue(), _uf.name, r_date.isoformat())
+                                st.session_state.photos.append(_ph)
+                            except Exception as _e:
+                                st.warning(f"อัปโหลดรูป '{_uf.name}' ไม่สำเร็จ: {_e}")
                 rec = {
-                    'id':      st.session_state.edit_id or uid(),
-                    'date':    r_date.isoformat(),
-                    'teamId':  r_tid,
-                    'workers': int(r_workers),
-                    'note':    r_note,
-                    'items':   [dict(w) for w in st.session_state.wi],
-                    'total':   auto_total,
+                    'id':       _rid,
+                    'date':     r_date.isoformat(),
+                    'teamId':   r_tid,
+                    'workers':  r_workers,
+                    'note':     r_note,
+                    'items':    [dict(w) for w in st.session_state.wi],
+                    'posItems': json.dumps([dict(pi) for pi in st.session_state.pos_items]),
+                    'photos':   json.dumps(st.session_state.photos, ensure_ascii=False),
+                    'total':    auto_total,
                 }
                 with st.spinner("กำลังบันทึก..."):
                     if st.session_state.edit_id:
@@ -482,6 +698,10 @@ elif PAGE == "add" and can_edit:
                         msg = "✅ บันทึกสำเร็จ"
                     save_db("reports")
                 st.success(msg)
+                st.session_state.pos_items = []
+                st.session_state.photos = []
+                st.session_state['_photo_edit'] = None
+                st.session_state['upload_key'] = st.session_state.get('upload_key', 0) + 1
                 st.session_state.edit_id = None
                 st.rerun()
 
@@ -547,7 +767,12 @@ elif PAGE == "add" and can_edit:
         with s1: save_btn = st.button("💾 บันทึกข้อมูล", type="primary", use_container_width=True)
         with s2:
             if st.button("🗑️ ล้างข้อมูล", use_container_width=True):
-                st.session_state.wi = []; st.session_state.edit_id = None; st.rerun()
+                st.session_state.wi = []
+                st.session_state.photos = []
+                st.session_state['_photo_edit'] = None
+                st.session_state['upload_key'] = st.session_state.get('upload_key', 0) + 1
+                st.session_state.edit_id = None
+                st.rerun()
 
         if save_btn:
             if not st.session_state.wi:
@@ -556,14 +781,25 @@ elif PAGE == "add" and can_edit:
                 st.error("กรุณาระบุปริมาณงานให้ครบทุกรายการ")
             else:
                 total = sum(w['amt'] for w in st.session_state.wi)
+                _rid = st.session_state.edit_id or uid()
+                if new_photos:
+                    with st.spinner(f"กำลังอัปโหลดรูปภาพ {len(new_photos)} รูป..."):
+                        for _uf in new_photos:
+                            try:
+                                _ph = upload_photo(_uf.getvalue(), _uf.name, r_date.isoformat())
+                                st.session_state.photos.append(_ph)
+                            except Exception as _e:
+                                st.warning(f"อัปโหลดรูป '{_uf.name}' ไม่สำเร็จ: {_e}")
                 rec = {
-                    'id':      st.session_state.edit_id or uid(),
-                    'date':    r_date.isoformat(),
-                    'teamId':  r_tid,
-                    'workers': int(r_workers),
-                    'note':    r_note,
-                    'items':   [dict(w) for w in st.session_state.wi],
-                    'total':   total,
+                    'id':       _rid,
+                    'date':     r_date.isoformat(),
+                    'teamId':   r_tid,
+                    'workers':  int(r_workers),
+                    'note':     r_note,
+                    'items':    [dict(w) for w in st.session_state.wi],
+                    'posItems': json.dumps([]),
+                    'photos':   json.dumps(st.session_state.photos, ensure_ascii=False),
+                    'total':    total,
                 }
                 with st.spinner("กำลังบันทึก..."):
                     if st.session_state.edit_id:
@@ -575,7 +811,11 @@ elif PAGE == "add" and can_edit:
                         msg = "✅ บันทึกสำเร็จ"
                     save_db("reports")
                 st.success(msg)
-                st.session_state.wi = []; st.session_state.edit_id = None
+                st.session_state.wi = []
+                st.session_state.photos = []
+                st.session_state['_photo_edit'] = None
+                st.session_state['upload_key'] = st.session_state.get('upload_key', 0) + 1
+                st.session_state.edit_id = None
                 st.rerun()
 
 # ═══════════════════════════════════════════════════════
@@ -770,7 +1010,7 @@ elif PAGE == "summary" and can_summary:
 # ═══════════════════════════════════════════════════════
 elif PAGE == "settings" and can_settings:
     st.markdown("### ⚙️ ตั้งค่าระบบ")
-    tab_t, tab_ct, tab_p = st.tabs(["👥 ทีมผู้รับเหมา", "📋 ประเภทการจ้าง", "🔧 ประเภทงาน / Unit Rate"])
+    tab_t, tab_ct, tab_p, tab_pos = st.tabs(["👥 ทีมผู้รับเหมา", "📋 ประเภทการจ้าง", "🔧 ประเภทงาน / Unit Rate", "🪪 ตำแหน่งงาน"])
 
     # ── helpers for contract type dropdown ──
     ct_list   = DB.get('contractTypes', [])
@@ -920,3 +1160,236 @@ elif PAGE == "settings" and can_settings:
                         DB['projects'] = [x for x in DB['projects'] if x['id']!=p['id']]
                         with st.spinner("กำลังบันทึก..."): save_db("projects")
                         st.rerun()
+
+    # ════════════════════════════════════════
+    # TAB: ตำแหน่งงาน
+    # ════════════════════════════════════════
+    with tab_pos:
+        pos_list = DB.get('positions', [])
+        with st.expander("➕ เพิ่มตำแหน่งงานใหม่", expanded=(not pos_list)):
+            with st.form("add_pos"):
+                pp1, pp2 = st.columns(2)
+                with pp1: pos_name = st.text_input("ชื่อตำแหน่ง * (เช่น ช่างเชื่อม, ช่างท่อ)")
+                with pp2: pos_rate = st.number_input("Rate ค่าจ้างต่อวัน (฿/วัน)",
+                                                     min_value=0.0, step=50.0, value=0.0)
+                if st.form_submit_button("💾 บันทึก", type="primary"):
+                    if not pos_name.strip():
+                        st.error("กรุณาระบุชื่อตำแหน่ง")
+                    else:
+                        DB.setdefault('positions', []).append(
+                            {'id': uid(), 'name': pos_name.strip(), 'dailyRate': pos_rate})
+                        with st.spinner("กำลังบันทึก..."): save_db("positions")
+                        st.success("✅ บันทึกสำเร็จ"); st.rerun()
+        st.markdown("---")
+        if not pos_list:
+            st.info("ยังไม่มีตำแหน่งงาน — กด ➕ เพิ่มตำแหน่งงานใหม่")
+        for pos in pos_list:
+            with st.expander(f"**{pos['name']}** — ฿{N(pos.get('dailyRate', 0))}/วัน"):
+                pe1, pe2 = st.columns(2)
+                with pe1: npos_name = st.text_input("ชื่อตำแหน่ง", value=pos['name'],
+                                                     key=f"posn_{pos['id']}")
+                with pe2: npos_rate = st.number_input("Rate (฿/วัน)",
+                                                       value=_f(pos.get('dailyRate', 0)),
+                                                       min_value=0.0, step=50.0,
+                                                       key=f"posr_{pos['id']}")
+                pb1, pb2 = st.columns(2)
+                with pb1:
+                    if st.button("💾 บันทึก", key=f"poss_{pos['id']}", use_container_width=True):
+                        pos['name']      = npos_name
+                        pos['dailyRate'] = npos_rate
+                        with st.spinner("กำลังบันทึก..."): save_db("positions")
+                        st.success("บันทึกแล้ว"); st.rerun()
+                with pb2:
+                    if st.button("🗑️ ลบ", key=f"posd_{pos['id']}", use_container_width=True):
+                        DB['positions'] = [x for x in DB['positions'] if x['id'] != pos['id']]
+                        with st.spinner("กำลังบันทึก..."): save_db("positions")
+                        st.rerun()
+
+# ═══════════════════════════════════════════════════════
+# PAGE: PRODUCTIVITY
+# ═══════════════════════════════════════════════════════
+elif PAGE == "productivity":
+    st.markdown("### 📉 Productivity — ติดตามผลงาน")
+
+    now = date.today()
+    tab_daily, tab_period = st.tabs(["📅 รายวัน", "📊 รายงวด"])
+
+    def _proj_name(pid):
+        return get_proj(pid).get('name', '?')
+
+    def _team_name(tid):
+        return get_team(tid).get('name', '?')
+
+    # ════════════════════════════════════════
+    # TAB: รายวัน
+    # ════════════════════════════════════════
+    with tab_daily:
+        c1, c2, c3 = st.columns([1, 1, 2])
+        with c1:
+            sel_yr = st.selectbox("ปี (พ.ศ.)", [now.year+543-i for i in range(4)],
+                                  key="pd_yr", format_func=lambda x: str(x))
+        with c2:
+            sel_mo = st.selectbox("เดือน", list(range(1, 13)), index=now.month - 1,
+                                  format_func=lambda x: TH_MO[x], key="pd_mo")
+        with c3:
+            team_opts = ["ทุกทีม"] + [t['name'] for t in DB['teams']]
+            sel_team = st.selectbox("ทีม", team_opts, key="pd_team")
+
+        yr_ad  = sel_yr - 543
+        m_str  = str(sel_mo).zfill(2)
+        prefix = f"{yr_ad}-{m_str}"
+
+        rpts = [r for r in DB['reports'] if r['date'].startswith(prefix)]
+        if sel_team != "ทุกทีม":
+            tid_sel = next((t['id'] for t in DB['teams'] if t['name'] == sel_team), None)
+            rpts = [r for r in rpts if r['teamId'] == tid_sel]
+
+        if not rpts:
+            st.info("ไม่มีข้อมูลในช่วงที่เลือก")
+        else:
+            # ── รายการงานแต่ละวัน ──
+            rows = []
+            for r in sorted(rpts, key=lambda x: x['date']):
+                tname   = _team_name(r['teamId'])
+                workers = _i(r.get('workers', 0))
+                items   = r.get('items', [])
+                if items and any(_f(it.get('qty', 0)) > 0 for it in items):
+                    for it in items:
+                        qty = _f(it.get('qty', 0))
+                        if qty <= 0:
+                            continue
+                        rows.append({
+                            "วันที่":           thd(r['date']),
+                            "ทีม":              tname,
+                            "คนงาน (คน)":      workers,
+                            "ประเภทงาน":       _proj_name(it['pid']),
+                            "ปริมาณ":          qty,
+                            "หน่วย":           it.get('unit', ''),
+                            "Productivity/คน": round(qty / workers, 3) if workers else 0,
+                        })
+                else:
+                    rows.append({
+                        "วันที่":           thd(r['date']),
+                        "ทีม":              tname,
+                        "คนงาน (คน)":      workers,
+                        "ประเภทงาน":       "—",
+                        "ปริมาณ":          0,
+                        "หน่วย":           "",
+                        "Productivity/คน": 0,
+                    })
+
+            st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
+
+            # ── สรุปปริมาณงานรวมในเดือน ──
+            st.markdown("---")
+            st.markdown(f"#### สรุปปริมาณงานรวม — {TH_MO[sel_mo]} {sel_yr}")
+            psum: dict = defaultdict(lambda: {"qty": 0.0, "unit": "", "workers": 0})
+            for r in rpts:
+                w = _i(r.get('workers', 0))
+                for it in r.get('items', []):
+                    qty = _f(it.get('qty', 0))
+                    if qty <= 0:
+                        continue
+                    pname = _proj_name(it['pid'])
+                    psum[pname]["qty"]     += qty
+                    psum[pname]["unit"]     = it.get('unit', '')
+                    psum[pname]["workers"] += w
+
+            if psum:
+                sum_rows = [{
+                    "ประเภทงาน":              pname,
+                    "หน่วย":                  v['unit'],
+                    "ปริมาณรวม":              round(v['qty'], 2),
+                    "Man-days รวม":           v['workers'],
+                    "Avg Productivity/คน/วัน": round(v['qty'] / v['workers'], 3) if v['workers'] else 0,
+                } for pname, v in psum.items()]
+                st.dataframe(pd.DataFrame(sum_rows), hide_index=True, use_container_width=True)
+            else:
+                st.info("ยังไม่มีรายการงานที่บันทึกในเดือนนี้")
+
+    # ════════════════════════════════════════
+    # TAB: รายงวด
+    # ════════════════════════════════════════
+    with tab_period:
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            sel_yr2 = st.selectbox("ปี (พ.ศ.)", [now.year+543-i for i in range(4)],
+                                   key="pp_yr", format_func=lambda x: str(x))
+        with c2:
+            sel_mo2 = st.selectbox("เดือน", list(range(1, 13)), index=now.month - 1,
+                                   format_func=lambda x: TH_MO[x], key="pp_mo")
+        with c3:
+            sel_p = st.selectbox("งวด", [1, 2],
+                                 format_func=lambda x: f"งวดที่ {x} ({'1–15' if x==1 else '16–สิ้นเดือน'})",
+                                 key="pp_p")
+
+        yr_ad2 = sel_yr2 - 543
+        s_date, e_date = pdates(yr_ad2, sel_mo2, sel_p)
+        rpts2 = [r for r in DB['reports'] if s_date <= r['date'] <= e_date]
+
+        st.markdown(f"**ช่วงเวลา:** {thd(s_date)} – {thd(e_date)}")
+
+        if not rpts2:
+            st.info("ไม่มีข้อมูลในงวดที่เลือก")
+        else:
+            st.markdown(f"**จำนวนรายการ:** {len(rpts2)} รายการ")
+
+            # ── สรุปรายทีม ──
+            st.markdown("---")
+            st.markdown("#### 👥 สรุปรายทีม")
+            team_rows = []
+            for t in DB['teams']:
+                t_rpts = [r for r in rpts2 if r['teamId'] == t['id']]
+                if not t_rpts:
+                    continue
+                days          = len(t_rpts)
+                workers_total = sum(_i(r.get('workers', 0)) for r in t_rpts)
+                psum_t: dict  = defaultdict(lambda: {"qty": 0.0, "unit": ""})
+                for r in t_rpts:
+                    for it in r.get('items', []):
+                        qty = _f(it.get('qty', 0))
+                        if qty <= 0:
+                            continue
+                        pname = _proj_name(it['pid'])
+                        psum_t[pname]["qty"]  += qty
+                        psum_t[pname]["unit"]  = it.get('unit', '')
+                items_str = ", ".join(
+                    f"{k}: {round(v['qty'],1)} {v['unit']}" for k, v in psum_t.items()
+                ) or "—"
+                team_rows.append({
+                    "ทีม":           t['name'],
+                    "วันทำงาน":     days,
+                    "Man-days":      workers_total,
+                    "รายการงาน":   items_str,
+                })
+            if team_rows:
+                st.dataframe(pd.DataFrame(team_rows), hide_index=True, use_container_width=True)
+
+            # ── สรุปตามประเภทงาน ──
+            st.markdown("---")
+            st.markdown("#### 🔧 สรุปตามประเภทงาน")
+            psum2: dict = defaultdict(lambda: {"qty": 0.0, "unit": "", "workers": 0, "teams": set()})
+            for r in rpts2:
+                w = _i(r.get('workers', 0))
+                for it in r.get('items', []):
+                    qty = _f(it.get('qty', 0))
+                    if qty <= 0:
+                        continue
+                    pname = _proj_name(it['pid'])
+                    psum2[pname]["qty"]     += qty
+                    psum2[pname]["unit"]     = it.get('unit', '')
+                    psum2[pname]["workers"] += w
+                    psum2[pname]["teams"].add(_team_name(r['teamId']))
+
+            if psum2:
+                proj_rows = [{
+                    "ประเภทงาน":              pname,
+                    "หน่วย":                  v['unit'],
+                    "ปริมาณรวม":              round(v['qty'], 2),
+                    "Man-days รวม":           v['workers'],
+                    "Productivity (หน่วย/คน)": round(v['qty'] / v['workers'], 3) if v['workers'] else 0,
+                    "ทีมที่ทำ":               ", ".join(sorted(v['teams'])),
+                } for pname, v in psum2.items()]
+                st.dataframe(pd.DataFrame(proj_rows), hide_index=True, use_container_width=True)
+            else:
+                st.info("ยังไม่มีรายการงานที่บันทึกในงวดนี้")
