@@ -6,23 +6,23 @@ import pandas as pd
 import gspread
 from google.oauth2.service_account import Credentials
 
-# âââ PAGE CONFIG âââââââââââââââââââââââââââââââââââââ
+# ─── PAGE CONFIG ─────────────────────────────────────
 st.set_page_config(
     page_title="KHT Daily Report",
-    page_icon="âï¸",
+    page_icon="⛑️",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-# âââ CONSTANTS âââââââââââââââââââââââââââââââââââââââ
+# ─── CONSTANTS ───────────────────────────────────────
 SHEET_ID   = "1PbxKOycC5aGIF2P98BKXoWhLmH7wCS8YEDjc-lEYn5A"
 ROLE_ADMIN = "admin"
 ROLE_SUPER = "supervisor"
 ROLE_VIEW  = "viewer"
-TH_MO   = ['','à¸¡à¸à¸£à¸²à¸à¸¡','à¸à¸¸à¸¡à¸ à¸²à¸à¸±à¸à¸à¹','à¸¡à¸µà¸à¸²à¸à¸¡','à¹à¸¡à¸©à¸²à¸¢à¸','à¸à¸¤à¸©à¸ à¸²à¸à¸¡','à¸¡à¸´à¸à¸¸à¸à¸²à¸¢à¸',
-            'à¸à¸£à¸à¸à¸²à¸à¸¡','à¸ªà¸´à¸à¸«à¸²à¸à¸¡','à¸à¸±à¸à¸¢à¸²à¸¢à¸','à¸à¸¸à¸¥à¸²à¸à¸¡','à¸à¸¤à¸¨à¸à¸´à¸à¸²à¸¢à¸','à¸à¸±à¸à¸§à¸²à¸à¸¡']
-TH_MO_S = ['','à¸¡.à¸.','à¸.à¸.','à¸¡à¸µ.à¸.','à¹à¸¡.à¸¢.','à¸.à¸.','à¸¡à¸´.à¸¢.',
-            'à¸.à¸.','à¸ª.à¸.','à¸.à¸¢.','à¸.à¸.','à¸.à¸¢.','à¸.à¸.']
+TH_MO   = ['','มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน',
+            'กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม']
+TH_MO_S = ['','ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.',
+            'ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.']
 SHEET_HEADERS = {
     "teams":         ["id", "name", "contractTypeId", "note"],
     "contractTypes": ["id", "name", "calcMode"],
@@ -30,10 +30,10 @@ SHEET_HEADERS = {
     "reports":       ["id", "date", "teamId", "workers", "note", "items", "total"],
     "payments":      ["id", "tid", "y", "mo", "p", "paid", "paidDate", "note"],
 }
-CALC_MODES = {"unit_rate": "à¸à¸´à¸à¸à¸²à¸¡ Unit Rate (à¸à¸£à¸´à¸¡à¸²à¸ Ã à¸£à¸²à¸à¸²)",
-              "by_workers": "à¸à¸´à¸à¸à¸²à¸¡à¸à¸³à¸à¸§à¸à¸à¸ (à¸à¸ Ã à¸§à¸±à¸ Ã à¸£à¸²à¸à¸²)"}
+CALC_MODES = {"unit_rate": "คิดตาม Unit Rate (ปริมาณ × ราคา)",
+              "by_workers": "คิดตามจำนวนคน (คน × วัน × ราคา)"}
 
-# âââ CSS âââââââââââââââââââââââââââââââââââââââââââââ
+# ─── CSS ─────────────────────────────────────────────
 st.markdown("""
 <style>
   [data-testid="stSidebar"] > div:first-child { background-color:#1e3a5f !important; }
@@ -58,7 +58,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# âââ HELPERS âââââââââââââââââââââââââââââââââââââââââ
+# ─── HELPERS ─────────────────────────────────────────
 def _f(v):
     try: return float(v or 0)
     except: return 0.0
@@ -84,7 +84,7 @@ def pdates(yr, mo, p):
     last = calendar.monthrange(yr, mo)[1]
     return f"{yr}-{m}-16", f"{yr}-{m}-{str(last).zfill(2)}"
 
-# âââ GOOGLE SHEETS ââââââââââââââââââââââââââââââââââââ
+# ─── GOOGLE SHEETS ────────────────────────────────────
 @st.cache_resource
 def get_gc():
     creds = Credentials.from_service_account_info(
@@ -136,7 +136,7 @@ def load_db():
         return {"teams": teams, "contractTypes": contractTypes,
                 "projects": projects, "reports": reports, "payments": payments}
     except Exception as e:
-        st.error(f"â à¹à¸«à¸¥à¸à¸à¹à¸­à¸¡à¸¹à¸¥à¹à¸¡à¹à¹à¸à¹: {e}")
+        st.error(f"❌ โหลดข้อมูลไม่ได้: {e}")
         return {"teams": [], "projects": [], "reports": [], "payments": []}
 
 def save_db(tables=None):
@@ -163,9 +163,9 @@ def save_db(tables=None):
                 rows.append(row)
             ws.update(rows)
     except Exception as e:
-        st.error(f"â à¸à¸±à¸à¸à¸¶à¸à¹à¸¡à¹à¸ªà¸³à¹à¸£à¹à¸: {e}")
+        st.error(f"❌ บันทึกไม่สำเร็จ: {e}")
 
-# âââ DB ACCESSORS âââââââââââââââââââââââââââââââââââââ
+# ─── DB ACCESSORS ─────────────────────────────────────
 def get_team(tid):
     return next((x for x in st.session_state.db['teams'] if x['id'] == tid),
                 {'name': '?', 'note': '', 'contractTypeId': ''})
@@ -188,7 +188,7 @@ def get_payment(tid, yr, mo, p):
                  if x['tid']==tid and _i(x['y'])==yr and
                     _i(x['mo'])==mo and _i(x['p'])==p), None)
 
-# âââ AUTH âââââââââââââââââââââââââââââââââââââââââââââ
+# ─── AUTH ─────────────────────────────────────────────
 def check_login(role_key, pw):
     try: return pw == st.secrets["passwords"][role_key]
     except: return False
@@ -198,40 +198,40 @@ def login_page():
     with col:
         st.markdown("""
         <div style="text-align:center;padding:40px 0 20px 0">
-          <div style="font-size:3.5rem">âï¸</div>
+          <div style="font-size:3.5rem">⛑️</div>
           <h2 style="color:#1e3a5f;margin:8px 0 4px 0">KHT Daily Report</h2>
-          <p style="color:#888;font-size:0.9rem">à¸£à¸°à¸à¸à¸à¸±à¸à¸à¸¶à¸à¸à¸¥à¸à¸²à¸à¸à¸¹à¹à¸£à¸±à¸à¹à¸«à¸¡à¸²</p>
+          <p style="color:#888;font-size:0.9rem">ระบบบันทึกผลงานผู้รับเหมา</p>
         </div>
         """, unsafe_allow_html=True)
 
         with st.form("login_form"):
             role_display = st.selectbox(
-                "à¸£à¸°à¸à¸±à¸à¸à¸¹à¹à¹à¸à¹à¸à¸²à¸",
-                ["ð à¸à¸¹à¹à¸à¸£à¸´à¸«à¸²à¸£ (Admin)", "ð§ à¸«à¸±à¸§à¸«à¸à¹à¸²à¸à¸²à¸", "ðï¸ à¸à¸¹à¸à¹à¸­à¸¡à¸¹à¸¥"]
+                "ระดับผู้ใช้งาน",
+                ["👑 ผู้บริหาร (Admin)", "🔧 หัวหน้างาน", "👁️ ดูข้อมูล"]
             )
-            pw = st.text_input("ð à¸£à¸«à¸±à¸ªà¸à¹à¸²à¸", type="password")
-            sub = st.form_submit_button("à¹à¸à¹à¸²à¸ªà¸¹à¹à¸£à¸°à¸à¸", type="primary", use_container_width=True)
+            pw = st.text_input("🔑 รหัสผ่าน", type="password")
+            sub = st.form_submit_button("เข้าสู่ระบบ", type="primary", use_container_width=True)
 
         if sub:
             rmap = {
-                "ð à¸à¸¹à¹à¸à¸£à¸´à¸«à¸²à¸£ (Admin)": ROLE_ADMIN,
-                "ð§ à¸«à¸±à¸§à¸«à¸à¹à¸²à¸à¸²à¸":       ROLE_SUPER,
-                "ðï¸ à¸à¸¹à¸à¹à¸­à¸¡à¸¹à¸¥":         ROLE_VIEW,
+                "👑 ผู้บริหาร (Admin)": ROLE_ADMIN,
+                "🔧 หัวหน้างาน":       ROLE_SUPER,
+                "👁️ ดูข้อมูล":         ROLE_VIEW,
             }
             rk = rmap[role_display]
             if check_login(rk, pw):
                 st.session_state.logged_in = True
                 st.session_state.role = rk
-                with st.spinner("â³ à¸à¸³à¸¥à¸±à¸à¹à¸«à¸¥à¸à¸à¹à¸­à¸¡à¸¹à¸¥..."):
+                with st.spinner("⏳ กำลังโหลดข้อมูล..."):
                     st.session_state.db = load_db()
                 st.session_state.wi = []
                 st.session_state.edit_id = None
                 st.session_state.page_key = None
                 st.rerun()
             else:
-                st.error("â à¸£à¸«à¸±à¸ªà¸à¹à¸²à¸à¹à¸¡à¹à¸à¸¹à¸à¸à¹à¸­à¸")
+                st.error("❌ รหัสผ่านไม่ถูกต้อง")
 
-# âââ SESSION STATE INIT âââââââââââââââââââââââââââââââ
+# ─── SESSION STATE INIT ───────────────────────────────
 for k, v in [('logged_in', False), ('role', None), ('wi', []),
               ('edit_id', None), ('page_key', None)]:
     if k not in st.session_state:
@@ -242,7 +242,7 @@ if not st.session_state.logged_in:
     st.stop()
 
 if 'db' not in st.session_state:
-    with st.spinner("â³ à¸à¸³à¸¥à¸±à¸à¹à¸«à¸¥à¸à¸à¹à¸­à¸¡à¸¹à¸¥..."):
+    with st.spinner("⏳ กำลังโหลดข้อมูล..."):
         st.session_state.db = load_db()
 
 DB            = st.session_state.db
@@ -252,15 +252,15 @@ can_see_money = role == ROLE_ADMIN
 can_summary   = role == ROLE_ADMIN
 can_settings  = role == ROLE_ADMIN
 
-ROLE_LABEL = {ROLE_ADMIN:"ð à¸à¸¹à¹à¸à¸£à¸´à¸«à¸²à¸£", ROLE_SUPER:"ð§ à¸«à¸±à¸§à¸«à¸à¹à¸²à¸à¸²à¸", ROLE_VIEW:"ðï¸ à¸à¸¹à¸à¹à¸­à¸¡à¸¹à¸¥"}
+ROLE_LABEL = {ROLE_ADMIN:"👑 ผู้บริหาร", ROLE_SUPER:"🔧 หัวหน้างาน", ROLE_VIEW:"👁️ ดูข้อมูล"}
 
-# âââ SIDEBAR âââââââââââââââââââââââââââââââââââââââââ
+# ─── SIDEBAR ─────────────────────────────────────────
 pages_map = {}
-pages_map["ð Dashboard"]           = "dashboard"
-if can_edit:    pages_map["â à¸à¸±à¸à¸à¸¶à¸à¸à¸²à¸à¸à¸£à¸°à¸à¸³à¸§à¸±à¸"] = "add"
-pages_map["ð à¸à¸¹à¸à¹à¸­à¸¡à¸¹à¸¥à¸£à¸²à¸¢à¸§à¸±à¸"]      = "view"
-if can_summary: pages_map["ð à¸ªà¸£à¸¸à¸à¸£à¸²à¸¢à¸à¸§à¸"]       = "summary"
-if can_settings:pages_map["âï¸ à¸à¸±à¹à¸à¸à¹à¸²à¸£à¸°à¸à¸"]      = "settings"
+pages_map["📊 Dashboard"]           = "dashboard"
+if can_edit:    pages_map["➕ บันทึกงานประจำวัน"] = "add"
+pages_map["🔍 ดูข้อมูลรายวัน"]      = "view"
+if can_summary: pages_map["📈 สรุปรายงวด"]       = "summary"
+if can_settings:pages_map["⚙️ ตั้งค่าระบบ"]      = "settings"
 
 # Validate stored page_key
 if st.session_state.page_key not in pages_map:
@@ -269,40 +269,40 @@ if st.session_state.page_key not in pages_map:
 with st.sidebar:
     st.markdown(f"""
     <div style="padding:4px 0 14px 0">
-      <div style="font-size:1.25rem;font-weight:700">âï¸ KHT Daily Report</div>
-      <div style="font-size:0.78rem;color:#e07b2b">à¸£à¸°à¸à¸à¸à¸±à¸à¸à¸¶à¸à¸à¸¥à¸à¸²à¸à¸à¸¹à¹à¸£à¸±à¸à¹à¸«à¸¡à¸²</div>
+      <div style="font-size:1.25rem;font-weight:700">⛑️ KHT Daily Report</div>
+      <div style="font-size:0.78rem;color:#e07b2b">ระบบบันทึกผลงานผู้รับเหมา</div>
       <div style="font-size:0.75rem;color:rgba(255,255,255,0.55);margin-top:5px">
         {ROLE_LABEL[role]}</div>
     </div>
     """, unsafe_allow_html=True)
 
     cur_idx = list(pages_map.keys()).index(st.session_state.page_key)
-    chosen  = st.radio("à¹à¸¡à¸à¸¹", list(pages_map.keys()),
+    chosen  = st.radio("เมนู", list(pages_map.keys()),
                         index=cur_idx, label_visibility="collapsed")
     st.session_state.page_key = chosen
     PAGE = pages_map[chosen]
 
     st.markdown("---")
-    if st.button("ð à¸£à¸µà¹à¸à¸£à¸à¸à¹à¸­à¸¡à¸¹à¸¥", use_container_width=True):
-        with st.spinner("à¸à¸³à¸¥à¸±à¸à¹à¸«à¸¥à¸..."):
+    if st.button("🔄 รีเฟรชข้อมูล", use_container_width=True):
+        with st.spinner("กำลังโหลด..."):
             st.session_state.db = load_db()
         st.rerun()
 
     if can_see_money:
         export_bytes = json.dumps(DB, ensure_ascii=False, indent=2).encode('utf-8')
-        st.download_button("ð¥ Export JSON", data=export_bytes,
+        st.download_button("📥 Export JSON", data=export_bytes,
                            file_name=f"kht-{today_str()}.json",
                            mime="application/json", use_container_width=True)
 
     st.markdown("---")
-    if st.button("ðª à¸­à¸­à¸à¸à¸²à¸à¸£à¸°à¸à¸", use_container_width=True):
+    if st.button("🚪 ออกจากระบบ", use_container_width=True):
         for k in ['logged_in','role','db','wi','edit_id','page_key']:
             st.session_state.pop(k, None)
         st.rerun()
 
-# âââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+# ═══════════════════════════════════════════════════════
 # PAGE: DASHBOARD
-# âââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+# ═══════════════════════════════════════════════════════
 if PAGE == "dashboard":
     now  = date.today()
     yr, mo, dy = now.year, now.month, now.day
@@ -312,8 +312,8 @@ if PAGE == "dashboard":
     me = f"{yr}-{str(mo).zfill(2)}-31"
     today = today_str()
 
-    period_lbl = f"à¸à¸§à¸à¸à¸µà¹ {p_cur}: {'1â15' if p_cur==1 else '16âà¸ªà¸´à¹à¸à¹à¸à¸·à¸­à¸'} {TH_MO[mo]} {yr+543}"
-    st.markdown(f"### ð Dashboard &nbsp;<span style='font-size:0.85rem;color:#777'>{period_lbl}</span>",
+    period_lbl = f"งวดที่ {p_cur}: {'1–15' if p_cur==1 else '16–สิ้นเดือน'} {TH_MO[mo]} {yr+543}"
+    st.markdown(f"### 📊 Dashboard &nbsp;<span style='font-size:0.85rem;color:#777'>{period_lbl}</span>",
                 unsafe_allow_html=True)
 
     today_rpts  = [r for r in DB['reports'] if r['date'] == today]
@@ -330,44 +330,44 @@ if PAGE == "dashboard":
             if not (lambda pay: pay and pay.get('paid'))(get_payment(t['id'],yr,mo,p))
         )
         c1,c2,c3,c4 = st.columns(4)
-        with c1: st.metric("ð à¸¢à¸­à¸à¸§à¸±à¸à¸à¸µà¹",   f"à¸¿ {N(today_tot)}")
-        with c2: st.metric("ð à¸¢à¸­à¸à¸à¸§à¸à¸à¸µà¹",   f"à¸¿ {N(period_tot)}")
-        with c3: st.metric("ðï¸ à¸¢à¸­à¸à¹à¸à¸·à¸­à¸à¸à¸µà¹", f"à¸¿ {N(month_tot)}")
-        with c4: st.metric("â ï¸ à¸à¹à¸²à¸à¸à¸³à¸£à¸°",    f"à¸¿ {N(unpaid)}")
+        with c1: st.metric("📅 ยอดวันนี้",   f"฿ {N(today_tot)}")
+        with c2: st.metric("📆 ยอดงวดนี้",   f"฿ {N(period_tot)}")
+        with c3: st.metric("🗓️ ยอดเดือนนี้", f"฿ {N(month_tot)}")
+        with c4: st.metric("⚠️ ค้างชำระ",    f"฿ {N(unpaid)}")
     else:
         c1,c2,c3 = st.columns(3)
-        with c1: st.metric("ð à¸£à¸²à¸¢à¸à¸²à¸à¸§à¸±à¸à¸à¸µà¹",    f"{len(today_rpts)} à¸£à¸²à¸¢à¸à¸²à¸£")
-        with c2: st.metric("ð à¸£à¸²à¸¢à¸à¸²à¸à¸à¸§à¸à¸à¸µà¹",    f"{len(period_rpts)} à¸£à¸²à¸¢à¸à¸²à¸£")
-        with c3: st.metric("ðï¸ à¸£à¸²à¸¢à¸à¸²à¸à¹à¸à¸·à¸­à¸à¸à¸µà¹",  f"{len(month_rpts)} à¸£à¸²à¸¢à¸à¸²à¸£")
+        with c1: st.metric("📅 รายงานวันนี้",    f"{len(today_rpts)} รายการ")
+        with c2: st.metric("📆 รายงานงวดนี้",    f"{len(period_rpts)} รายการ")
+        with c3: st.metric("🗓️ รายงานเดือนนี้",  f"{len(month_rpts)} รายการ")
 
     st.markdown("---")
     ca, cb = st.columns(2)
-    with ca: st.metric("ð¥ à¸à¸³à¸à¸§à¸à¸à¸µà¸¡",   len(DB['teams']))
-    with cb: st.metric("ð§ à¸à¸£à¸°à¹à¸ à¸à¸à¸²à¸", len(DB['projects']))
+    with ca: st.metric("👥 จำนวนทีม",   len(DB['teams']))
+    with cb: st.metric("🔧 ประเภทงาน", len(DB['projects']))
 
     st.markdown("---")
-    st.markdown("#### ð à¸à¸¥à¸à¸²à¸à¸§à¸±à¸à¸à¸µà¹")
+    st.markdown("#### 📋 ผลงานวันนี้")
     if not today_rpts:
-        st.info("à¸¢à¸±à¸à¹à¸¡à¹à¸¡à¸µà¸à¹à¸­à¸¡à¸¹à¸¥à¸§à¸±à¸à¸à¸µà¹")
+        st.info("ยังไม่มีข้อมูลวันนี้")
     else:
         rows = []
         for r in today_rpts:
             items_str = " | ".join(
                 f"{get_proj(it['pid'])['name']}: {it['qty']} {it['unit']}"
-                + (f" = {N(it['amt'])}à¸¿" if can_see_money else "")
+                + (f" = {N(it['amt'])}฿" if can_see_money else "")
                 for it in r['items']
             )
-            row = {"à¸à¸µà¸¡": get_team(r['teamId'])['name'], "à¸à¸à¸à¸²à¸": r['workers'],
-                   "à¸£à¸²à¸¢à¸à¸²à¸£à¸à¸²à¸": items_str}
-            if can_see_money: row["à¸£à¸§à¸¡ (à¸¿)"] = N(r['total'])
+            row = {"ทีม": get_team(r['teamId'])['name'], "คนงาน": r['workers'],
+                   "รายการงาน": items_str}
+            if can_see_money: row["รวม (฿)"] = N(r['total'])
             rows.append(row)
         st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
-# âââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+# ═══════════════════════════════════════════════════════
 # PAGE: ADD / EDIT REPORT
-# âââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+# ═══════════════════════════════════════════════════════
 elif PAGE == "add" and can_edit:
-    st.markdown("### â à¸à¸±à¸à¸à¸¶à¸à¸à¸²à¸à¸à¸£à¸°à¸à¸³à¸§à¸±à¸")
+    st.markdown("### ➕ บันทึกงานประจำวัน")
 
     edit_rec = None
     if st.session_state.edit_id:
@@ -375,30 +375,30 @@ elif PAGE == "add" and can_edit:
         if edit_rec and not st.session_state.wi:
             st.session_state.wi = [dict(i) for i in edit_rec['items']]
         if edit_rec:
-            st.info(f"âï¸ à¸à¸³à¸¥à¸±à¸à¹à¸à¹à¹à¸: {thd(edit_rec['date'])} â {get_team(edit_rec['teamId'])['name']}")
+            st.info(f"✏️ กำลังแก้ไข: {thd(edit_rec['date'])} — {get_team(edit_rec['teamId'])['name']}")
 
     col1, col2, col3 = st.columns([1.5,1.5,1])
     with col1:
         default_dt = datetime.strptime(edit_rec['date'],'%Y-%m-%d').date() if edit_rec else date.today()
-        r_date = st.date_input("ð à¸§à¸±à¸à¸à¸µà¹ *", value=default_dt)
+        r_date = st.date_input("📅 วันที่ *", value=default_dt)
     with col2:
         tnames = [t['name'] for t in DB['teams']]
         tids   = [t['id']   for t in DB['teams']]
         if not tnames:
-            st.warning("à¸¢à¸±à¸à¹à¸¡à¹à¸¡à¸µà¸à¸µà¸¡ â à¸à¸­à¹à¸«à¹ Admin à¹à¸à¸´à¹à¸¡à¸à¸µà¸¡à¸à¹à¸­à¸"); st.stop()
+            st.warning("ยังไม่มีทีม — ขอให้ Admin เพิ่มทีมก่อน"); st.stop()
         def_ti = tids.index(edit_rec['teamId']) if edit_rec and edit_rec['teamId'] in tids else 0
-        r_tname = st.selectbox("ð¥ à¸à¸µà¸¡à¸à¸¹à¹à¸£à¸±à¸à¹à¸«à¸¡à¸² *", tnames, index=def_ti)
+        r_tname = st.selectbox("👥 ทีมผู้รับเหมา *", tnames, index=def_ti)
         r_tid   = tids[tnames.index(r_tname)]
     with col3:
-        r_workers = st.number_input("ð§âð§ à¸à¸³à¸à¸§à¸à¸à¸à¸à¸²à¸ *", min_value=0,
+        r_workers = st.number_input("🧑‍🔧 จำนวนคนงาน *", min_value=0,
                                     value=_i(edit_rec['workers']) if edit_rec else 0)
-    r_note = st.text_input("ð à¸«à¸¡à¸²à¸¢à¹à¸«à¸à¸¸", value=edit_rec.get('note','') if edit_rec else '')
+    r_note = st.text_input("📝 หมายเหตุ", value=edit_rec.get('note','') if edit_rec else '')
 
     st.markdown("---")
-    st.markdown("**ð à¸£à¸²à¸¢à¸à¸²à¸£à¸à¸²à¸**")
+    st.markdown("**📋 รายการงาน**")
 
     if not DB['projects']:
-        st.warning("à¸¢à¸±à¸à¹à¸¡à¹à¸¡à¸µà¸à¸£à¸°à¹à¸ à¸à¸à¸²à¸ â à¸à¸­à¹à¸«à¹ Admin à¹à¸à¸´à¹à¸¡à¸à¹à¸­à¸")
+        st.warning("ยังไม่มีประเภทงาน — ขอให้ Admin เพิ่มก่อน")
     else:
         pnames = [p['name'] for p in DB['projects']]
         pids   = [p['id']   for p in DB['projects']]
@@ -412,34 +412,34 @@ elif PAGE == "add" and can_edit:
 
             with c1:
                 cur_pi = pids.index(item['pid']) if item.get('pid') in pids else 0
-                sel = st.selectbox(f"à¸à¸²à¸#{idx+1}", pnames, index=cur_pi,
+                sel = st.selectbox(f"งาน#{idx+1}", pnames, index=cur_pi,
                                    key=f"psel_{idx}", label_visibility="collapsed")
                 sp = DB['projects'][pnames.index(sel)]
                 item['pid']  = sp['id']
                 item['unit'] = sp['unit']
                 item['rate'] = _f(sp['unitRate'])
             with c2:
-                st.text_input("à¸«à¸à¹à¸§à¸¢", value=item['unit'], disabled=True,
+                st.text_input("หน่วย", value=item['unit'], disabled=True,
                               key=f"unit_{idx}", label_visibility="collapsed")
             if can_see_money:
                 with c3:
                     st.text_input("Rate", value=N(item['rate']), disabled=True,
                                   key=f"rate_{idx}", label_visibility="collapsed")
             with c4:
-                item['qty'] = st.number_input("à¸à¸£à¸´à¸¡à¸²à¸", min_value=0.0,
+                item['qty'] = st.number_input("ปริมาณ", min_value=0.0,
                                               value=float(item.get('qty',0)),
                                               step=0.01, key=f"qty_{idx}",
                                               label_visibility="collapsed")
                 item['amt'] = item['qty'] * item['rate']
             with c5:
-                if st.button("ðï¸", key=f"del_{idx}"): to_rm = idx
+                if st.button("🗑️", key=f"del_{idx}"): to_rm = idx
 
         if to_rm is not None:
             st.session_state.wi.pop(to_rm); st.rerun()
 
         ab, _ = st.columns([1,5])
         with ab:
-            if st.button("â à¹à¸à¸´à¹à¸¡à¸£à¸²à¸¢à¸à¸²à¸£à¸à¸²à¸"):
+            if st.button("➕ เพิ่มรายการงาน"):
                 fp = DB['projects'][0]
                 st.session_state.wi.append({'id':uid(),'pid':fp['id'],
                     'unit':fp['unit'],'rate':_f(fp['unitRate']),'qty':0,'amt':0})
@@ -447,21 +447,21 @@ elif PAGE == "add" and can_edit:
 
         if st.session_state.wi and can_see_money:
             grand = sum(w['amt'] for w in st.session_state.wi)
-            st.markdown(f"**à¸£à¸§à¸¡à¸à¸±à¹à¸à¸«à¸¡à¸: <span style='color:#e07b2b;font-size:1.1rem'>à¸¿ {N(grand)}</span>**",
+            st.markdown(f"**รวมทั้งหมด: <span style='color:#e07b2b;font-size:1.1rem'>฿ {N(grand)}</span>**",
                         unsafe_allow_html=True)
 
         st.markdown("---")
         s1,s2,_ = st.columns([1.2,1,5])
-        with s1: save_btn = st.button("ð¾ à¸à¸±à¸à¸à¸¶à¸à¸à¹à¸­à¸¡à¸¹à¸¥", type="primary", use_container_width=True)
+        with s1: save_btn = st.button("💾 บันทึกข้อมูล", type="primary", use_container_width=True)
         with s2:
-            if st.button("ðï¸ à¸¥à¹à¸²à¸à¸à¹à¸­à¸¡à¸¹à¸¥", use_container_width=True):
+            if st.button("🗑️ ล้างข้อมูล", use_container_width=True):
                 st.session_state.wi = []; st.session_state.edit_id = None; st.rerun()
 
         if save_btn:
             if not st.session_state.wi:
-                st.error("à¸à¸£à¸¸à¸à¸²à¹à¸à¸´à¹à¸¡à¸£à¸²à¸¢à¸à¸²à¸£à¸à¸²à¸à¸­à¸¢à¹à¸²à¸à¸à¹à¸­à¸¢ 1 à¸£à¸²à¸¢à¸à¸²à¸£")
+                st.error("กรุณาเพิ่มรายการงานอย่างน้อย 1 รายการ")
             elif any(w['qty'] <= 0 for w in st.session_state.wi):
-                st.error("à¸à¸£à¸¸à¸à¸²à¸£à¸°à¸à¸¸à¸à¸£à¸´à¸¡à¸²à¸à¸à¸²à¸à¹à¸«à¹à¸à¸£à¸à¸à¸¸à¸à¸£à¸²à¸¢à¸à¸²à¸£")
+                st.error("กรุณาระบุปริมาณงานให้ครบทุกรายการ")
             else:
                 total = sum(w['amt'] for w in st.session_state.wi)
                 rec = {
@@ -473,105 +473,101 @@ elif PAGE == "add" and can_edit:
                     'items':   [dict(w) for w in st.session_state.wi],
                     'total':   total,
                 }
-                with st.spinner("à¸à¸³à¸¥à¸±à¸à¸à¸±à¸à¸à¸¶à¸..."):
+                with st.spinner("กำลังบันทึก..."):
                     if st.session_state.edit_id:
                         idx2 = next((i for i,r in enumerate(DB['reports']) if r['id']==rec['id']), None)
                         if idx2 is not None: DB['reports'][idx2] = rec
-                        msg = "â à¹à¸à¹à¹à¸à¸ªà¸³à¹à¸£à¹à¸"
+                        msg = "✅ แก้ไขสำเร็จ"
                     else:
                         DB['reports'].append(rec)
-                        msg = "â à¸à¸±à¸à¸à¸¶à¸à¸ªà¸³à¹à¸£à¹à¸"
+                        msg = "✅ บันทึกสำเร็จ"
                     save_db("reports")
                 st.success(msg)
                 st.session_state.wi = []; st.session_state.edit_id = None
                 st.rerun()
 
-# âââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+# ═══════════════════════════════════════════════════════
 # PAGE: VIEW REPORTS
-# âââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+# ═══════════════════════════════════════════════════════
 elif PAGE == "view":
-    st.markdown("### ð à¸à¸¹à¸à¹à¸­à¸¡à¸¹à¸¥à¸£à¸²à¸¢à¸§à¸±à¸")
+    st.markdown("### 🔍 ดูข้อมูลรายวัน")
 
     fc1,fc2,fc3 = st.columns([1.5,1,1])
-    with fc1: ftype = st.selectbox("à¸à¸²à¸£à¸à¹à¸à¸«à¸²", ["à¸à¸±à¹à¸à¸«à¸¡à¸","à¸£à¸°à¸à¸¸à¸§à¸±à¸à¸à¸µà¹","à¸à¹à¸§à¸à¸§à¸±à¸à¸à¸µà¹"])
+    with fc1: ftype = st.selectbox("การค้นหา", ["ทั้งหมด","ระบุวันที่","ช่วงวันที่"])
     with fc2:
-        topts = ["à¸à¸¸à¸à¸à¸µà¸¡"] + [t['name'] for t in DB['teams']]
-        f_team = st.selectbox("à¸à¸µà¸¡", topts)
-    with fc3: sort_dir = st.selectbox("à¹à¸£à¸µà¸¢à¸", ["à¸§à¸±à¸à¸à¸µà¹à¸¥à¹à¸²à¸ªà¸¸à¸","à¸§à¸±à¸à¸à¸µà¹à¹à¸à¹à¸²à¸ªà¸¸à¸"])
+        topts = ["ทุกทีม"] + [t['name'] for t in DB['teams']]
+        f_team = st.selectbox("ทีม", topts)
+    with fc3: sort_dir = st.selectbox("เรียง", ["วันที่ล่าสุด","วันที่เก่าสุด"])
 
     f_date = f_start = f_end = None
-    if ftype == "à¸£à¸°à¸à¸¸à¸§à¸±à¸à¸à¸µà¹": f_date  = st.date_input("à¸§à¸±à¸à¸à¸µà¹", value=date.today())
-    elif ftype == "à¸à¹à¸§à¸à¸§à¸±à¸à¸à¸µà¹":
+    if ftype == "ระบุวันที่": f_date  = st.date_input("วันที่", value=date.today())
+    elif ftype == "ช่วงวันที่":
         dc1,dc2 = st.columns(2)
-        with dc1: f_start = st.date_input("à¸à¸²à¸à¸§à¸±à¸à¸à¸µà¹")
-        with dc2: f_end   = st.date_input("à¸à¸¶à¸à¸§à¸±à¸à¸à¸µà¹")
+        with dc1: f_start = st.date_input("จากวันที่")
+        with dc2: f_end   = st.date_input("ถึงวันที่")
 
     rpts = list(DB['reports'])
-    if f_team != "à¸à¸¸à¸à¸à¸µà¸¡":
+    if f_team != "ทุกทีม":
         tid2 = next((t['id'] for t in DB['teams'] if t['name']==f_team), None)
         if tid2: rpts = [r for r in rpts if r['teamId']==tid2]
-    if ftype=="à¸£à¸°à¸à¸¸à¸§à¸±à¸à¸à¸µà¹" and f_date:
+    if ftype=="ระบุวันที่" and f_date:
         rpts = [r for r in rpts if r['date']==f_date.isoformat()]
-    elif ftype=="à¸à¹à¸§à¸à¸§à¸±à¸à¸à¸µà¹":
+    elif ftype=="ช่วงวันที่":
         if f_start: rpts = [r for r in rpts if r['date']>=f_start.isoformat()]
         if f_end:   rpts = [r for r in rpts if r['date']<=f_end.isoformat()]
-    rpts.sort(key=lambda r: r['date'], reverse=(sort_dir=="à¸§à¸±à¸à¸à¸µà¹à¸¥à¹à¸²à¸ªà¸¸à¸"))
+    rpts.sort(key=lambda r: r['date'], reverse=(sort_dir=="วันที่ล่าสุด"))
 
     total_sum = sum(_f(r['total']) for r in rpts)
-    info_txt  = f"à¸à¸ **{len(rpts)}** à¸£à¸²à¸¢à¸à¸²à¸£"
-    if can_see_money: info_txt += f" &nbsp;|&nbsp; à¸£à¸§à¸¡ **à¸¿ {N(total_sum)}**"
+    info_txt  = f"พบ **{len(rpts)}** รายการ"
+    if can_see_money: info_txt += f" &nbsp;|&nbsp; รวม **฿ {N(total_sum)}**"
     st.markdown(info_txt, unsafe_allow_html=True)
     st.markdown("---")
 
     if not rpts:
-        st.info("à¹à¸¡à¹à¸à¸à¸à¹à¸­à¸¡à¸¹à¸¥")
+        st.info("ไม่พบข้อมูล")
     else:
         for r in rpts:
             tname2 = get_team(r['teamId'])['name']
-            hdr = f"ð {thd(r['date'])}  â  {tname2}  â  ð· {r['workers']} à¸à¸"
-            if can_see_money: hdr += f"  â  à¸¿ {N(r['total'])}"
+            hdr = f"📅 {thd(r['date'])}  —  {tname2}  —  👷 {r['workers']} คน"
+            if can_see_money: hdr += f"  —  ฿ {N(r['total'])}"
             with st.expander(hdr):
                 dc1,dc2 = st.columns([3,1])
                 with dc1:
                     irows = []
                     for it in r['items']:
                         p2 = get_proj(it['pid'])
-                        row2 = {"à¸à¸²à¸": p2['name'], "à¸«à¸à¹à¸§à¸¢": it['unit'], "à¸à¸£à¸´à¸¡à¸²à¸": it['qty']}
+                        row2 = {"งาน": p2['name'], "หน่วย": it['unit'], "ปริมาณ": it['qty']}
                         if can_see_money:
-                            row2["Rate(à¸¿)"] = N(it['rate'])
-                            row2["à¹à¸à¸´à¸(à¸¿)"] = N(it['amt'])
+                            row2["Rate(฿)"] = N(it['rate'])
+                            row2["เงิน(฿)"] = N(it['amt'])
                         irows.append(row2)
                     st.dataframe(pd.DataFrame(irows), hide_index=True, use_container_width=True)
-                    if r.get('note'): st.caption(f"ð {r['note']}")
+                    if r.get('note'): st.caption(f"📝 {r['note']}")
                 with dc2:
-                    st.metric("à¸à¸à¸à¸²à¸", r['workers'])
-                    if can_see_money: st.metric("à¸£à¸§à¸¡ (à¸¿)", N(r['total']))
+                    st.metric("คนงาน", r['workers'])
+                    if can_see_money: st.metric("รวม (฿)", N(r['total']))
                     if can_edit:
                         eb1,eb2 = st.columns(2)
                         with eb1:
-                            if st.button("âï¸ à¹à¸à¹à¹à¸", key=f"ed_{r['id']}"):
+                            if st.button("✏️ แก้ไข", key=f"ed_{r['id']}"):
                                 st.session_state.edit_id = r['id']
                                 st.session_state.wi = []
-                                st.session_state.page_key = "â à¸à¸±à¸à¸à¸¶à¸à¸à¸²à¸à¸à¸£à¸°à¸à¸³à¸§à¸±à¸"
+                                st.session_state.page_key = "➕ บันทึกงานประจำวัน"
                                 st.rerun()
                         with eb2:
-                            if st.button("ðï¸ à¸¥à¸", key=f"dl_{r['id']}"):
+                            if st.button("🗑️ ลบ", key=f"dl_{r['id']}"):
                                 DB['reports'] = [x for x in DB['reports'] if x['id']!=r['id']]
-                                with st.spinner("à¸à¸³à¸¥à¸±à¸à¸à¸±à¸à¸à¸¶à¸..."): save_db("reports")
+                                with st.spinner("กำลังบันทึก..."): save_db("reports")
                                 st.rerun()
 
-# âââââââââââââââââââââââââââââââââââââââââââââââââââââââ
-# PAGE: PERIOD REPORT
-CPAGE: PERIOD REPORT
-CPAGE: PERIOD REPORT
-CPAGE: PERIOD REPORT
-CPAGE: PERIOD SUMWARY (Admin only)
-# âââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+# ═══════════════════════════════════════════════════════
+# PAGE: PERIOD SUMMARY (Admin only)
+# ═══════════════════════════════════════════════════════
 elif PAGE == "summary" and can_summary:
-    st.markdown("### ð à¸ªà¸£à¸¸à¸à¸£à¸²à¸¢à¸à¸§à¸")
+    st.markdown("### 📈 สรุปรายงวด")
     sc1,sc2 = st.columns(2)
-    with sc1: sel_year  = st.number_input("à¸à¸µ (à¸.à¸¨.)", min_value=2020, max_value=2035, value=date.today().year)
-    with sc2: sel_month = st.selectbox("à¹à¸à¸·à¸­à¸", list(range(1,13)),
+    with sc1: sel_year  = st.number_input("ปี (ค.ศ.)", min_value=2020, max_value=2035, value=date.today().year)
+    with sc2: sel_month = st.selectbox("เดือน", list(range(1,13)),
                                         index=date.today().month-1,
                                         format_func=lambda m: TH_MO[m])
     yr2, mo2 = int(sel_year), int(sel_month)
@@ -591,14 +587,14 @@ elif PAGE == "summary" and can_summary:
             rows_d.append((t, tot, rpts, pay, ip))
 
         st.markdown(
-            f"<div class='period-hdr'>à¸à¸§à¸à¸à¸µà¹ {period}: {sday}â{eday} {TH_MO[mo2]} {yr2+543} "
-            f"&nbsp;|&nbsp; à¸£à¸§à¸¡ à¸¿ {N(ptot)} &nbsp;|&nbsp; "
-            f"<span style='color:#a8d8a8'>à¸à¹à¸²à¸¢à¹à¸¥à¹à¸§ à¸¿ {N(paid)}</span> &nbsp;"
-            f"<span style='color:#f8a9a9'>à¸à¹à¸²à¸ à¸¿ {N(ptot-paid)}</span></div>",
+            f"<div class='period-hdr'>งวดที่ {period}: {sday}–{eday} {TH_MO[mo2]} {yr2+543} "
+            f"&nbsp;|&nbsp; รวม ฿ {N(ptot)} &nbsp;|&nbsp; "
+            f"<span style='color:#a8d8a8'>จ่ายแล้ว ฿ {N(paid)}</span> &nbsp;"
+            f"<span style='color:#f8a9a9'>ค้าง ฿ {N(ptot-paid)}</span></div>",
             unsafe_allow_html=True)
 
         if not DB['teams']:
-            st.info("à¸¢à¸±à¸à¹à¸¡à¹à¸¡à¸µà¸à¸µà¸¡"); return
+            st.info("ยังไม่มีทีม"); return
 
         for t,tot,rpts,pay,ip in rows_d:
             days   = len(rpts)
@@ -606,33 +602,33 @@ elif PAGE == "summary" and can_summary:
             rc1,rc2,rc3 = st.columns([3,1.5,1.5])
             with rc1:
                 st.markdown(f"**{t['name']}**")
-                st.caption(f"{days} à¸§à¸±à¸à¸à¸³à¸à¸²à¸ | {manday} à¸à¸-à¸§à¸±à¸")
-                if ip: st.caption(f"â à¸à¹à¸²à¸¢à¸§à¸±à¸à¸à¸µà¹ {thd(pay.get('paidDate'))} {pay.get('note','')}")
+                st.caption(f"{days} วันทำงาน | {manday} คน-วัน")
+                if ip: st.caption(f"✅ จ่ายวันที่ {thd(pay.get('paidDate'))} {pay.get('note','')}")
             with rc2:
-                st.metric("", f"à¸¿ {N(tot)}")
+                st.metric("", f"฿ {N(tot)}")
             with rc3:
                 sk = f"mark_{t['id']}_{period}"
                 if ip:
-                    st.markdown("<div class='b-paid'>â à¸à¹à¸²à¸¢à¹à¸¥à¹à¸§</div>", unsafe_allow_html=True)
-                    if tot>0 and st.button("à¸¢à¸à¹à¸¥à¸´à¸", key=f"un_{t['id']}_{period}", use_container_width=True):
+                    st.markdown("<div class='b-paid'>✓ จ่ายแล้ว</div>", unsafe_allow_html=True)
+                    if tot>0 and st.button("ยกเลิก", key=f"un_{t['id']}_{period}", use_container_width=True):
                         for px in DB['payments']:
                             if px['tid']==t['id'] and _i(px['y'])==yr2 and _i(px['mo'])==mo2 and _i(px['p'])==period:
                                 px['paid']=False; px['paidDate']=''
-                        with st.spinner("à¸à¸³à¸¥à¸±à¸à¸à¸±à¸à¸à¸¶à¸..."): save_db("payments")
+                        with st.spinner("กำลังบันทึก..."): save_db("payments")
                         st.rerun()
                 else:
                     if tot>0:
-                        st.markdown("<div class='b-unpaid'>à¸¢à¸±à¸à¹à¸¡à¹à¹à¸à¹à¸à¹à¸²à¸¢</div>", unsafe_allow_html=True)
-                        if st.button("ð° à¸à¹à¸²à¸¢à¹à¸¥à¹à¸§", key=f"pk_{t['id']}_{period}", use_container_width=True):
+                        st.markdown("<div class='b-unpaid'>ยังไม่ได้จ่าย</div>", unsafe_allow_html=True)
+                        if st.button("💰 จ่ายแล้ว", key=f"pk_{t['id']}_{period}", use_container_width=True):
                             st.session_state[sk] = True; st.rerun()
                     else:
-                        st.caption("à¹à¸¡à¹à¸¡à¸µà¸à¸²à¸")
+                        st.caption("ไม่มีงาน")
 
             if st.session_state.get(f"mark_{t['id']}_{period}"):
                 with st.form(key=f"pf_{t['id']}_{period}"):
-                    pd_inp = st.date_input("à¸§à¸±à¸à¸à¸µà¹à¸à¹à¸²à¸¢", value=date.today())
-                    pn_inp = st.text_input("à¸«à¸¡à¸²à¸¢à¹à¸«à¸à¸¸")
-                    if st.form_submit_button("â à¸¢à¸·à¸à¸¢à¸±à¸"):
+                    pd_inp = st.date_input("วันที่จ่าย", value=date.today())
+                    pn_inp = st.text_input("หมายเหตุ")
+                    if st.form_submit_button("✅ ยืนยัน"):
                         prec = {'id':uid(),'tid':t['id'],'y':yr2,'mo':mo2,'p':period,
                                 'paid':True,'paidDate':pd_inp.isoformat(),'note':pn_inp}
                         idx3 = next((i for i,px in enumerate(DB['payments'])
@@ -640,7 +636,7 @@ elif PAGE == "summary" and can_summary:
                                         _i(px['mo'])==mo2 and _i(px['p'])==period), None)
                         if idx3 is not None: DB['payments'][idx3] = prec
                         else: DB['payments'].append(prec)
-                        with st.spinner("à¸à¸³à¸¥à¸±à¸à¸à¸±à¸à¸à¸¶à¸..."): save_db("payments")
+                        with st.spinner("กำลังบันทึก..."): save_db("payments")
                         st.session_state[f"mark_{t['id']}_{period}"] = False
                         st.rerun()
             st.markdown("<hr style='margin:6px 0;border-color:#f0f2f5'>", unsafe_allow_html=True)
@@ -650,7 +646,7 @@ elif PAGE == "summary" and can_summary:
     render_period(2)
 
     st.markdown("---")
-    st.markdown(f"#### ð à¸ªà¸£à¸¸à¸à¸£à¸§à¸¡ {TH_MO[mo2]} {yr2+543}")
+    st.markdown(f"#### 📊 สรุปรวม {TH_MO[mo2]} {yr2+543}")
     m_str = str(mo2).zfill(2)
     cum_rows = []
     for t in DB['teams']:
@@ -665,30 +661,30 @@ elif PAGE == "summary" and can_summary:
                 s2,e2 = pdates(yr2, mo2, pp)
                 pd_tot += sum(_f(r['total']) for r in DB['reports']
                               if r['teamId']==t['id'] and s2<=r['date']<=e2)
-        cum_rows.append({"à¸à¸µà¸¡":t['name'],"à¸à¸-à¸§à¸±à¸":manday,
-                         "à¸¢à¸­à¸à¸£à¸§à¸¡(à¸¿)":N(tot),"à¸à¹à¸²à¸¢à¹à¸¥à¹à¸§(à¸¿)":N(pd_tot),"à¸à¹à¸²à¸(à¸¿)":N(tot-pd_tot)})
+        cum_rows.append({"ทีม":t['name'],"คน-วัน":manday,
+                         "ยอดรวม(฿)":N(tot),"จ่ายแล้ว(฿)":N(pd_tot),"ค้าง(฿)":N(tot-pd_tot)})
     if cum_rows:
-        gt  = sum(_f(r["à¸¢à¸­à¸à¸£à¸§à¸¡(à¸¿)"].replace(',',''))  for r in cum_rows)
-        gp  = sum(_f(r["à¸à¹à¸²à¸¢à¹à¸¥à¹à¸§(à¸¿)"].replace(',','')) for r in cum_rows)
-        gmd = sum(r["à¸à¸-à¸§à¸±à¸"] for r in cum_rows)
-        cum_rows.append({"à¸à¸µà¸¡":"à¸£à¸§à¸¡à¸à¸±à¹à¸à¸«à¸¡à¸","à¸à¸-à¸§à¸±à¸":gmd,
-                         "à¸¢à¸­à¸à¸£à¸§à¸¡(à¸¿)":N(gt),"à¸à¹à¸²à¸¢à¹à¸¥à¹à¸§(à¸¿)":N(gp),"à¸à¹à¸²à¸(à¸¿)":N(gt-gp)})
+        gt  = sum(_f(r["ยอดรวม(฿)"].replace(',',''))  for r in cum_rows)
+        gp  = sum(_f(r["จ่ายแล้ว(฿)"].replace(',','')) for r in cum_rows)
+        gmd = sum(r["คน-วัน"] for r in cum_rows)
+        cum_rows.append({"ทีม":"รวมทั้งหมด","คน-วัน":gmd,
+                         "ยอดรวม(฿)":N(gt),"จ่ายแล้ว(฿)":N(gp),"ค้าง(฿)":N(gt-gp)})
         st.dataframe(pd.DataFrame(cum_rows), hide_index=True, use_container_width=True)
     else:
-        st.info("à¹à¸¡à¹à¸¡à¸µà¸à¹à¸­à¸¡à¸¹à¸¥à¹à¸à¸·à¸­à¸à¸à¸µà¹")
+        st.info("ไม่มีข้อมูลเดือนนี้")
 
-# âââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+# ═══════════════════════════════════════════════════════
 # PAGE: SETTINGS (Admin only)
-# âââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+# ═══════════════════════════════════════════════════════
 elif PAGE == "settings" and can_settings:
-    st.markdown("### âï¸ à¸à¸±à¹à¸à¸à¹à¸²à¸£à¸°à¸à¸")
-    tab_t, tab_ct, tab_p = st.tabs(["ð¥ à¸à¸µà¸¡à¸à¸¹à¹à¸£à¸±à¸à¹à¸«à¸¡à¸²", "ð à¸à¸£à¸°à¹à¸ à¸à¸à¸²à¸£à¸à¹à¸²à¸", "ð§ à¸à¸£à¸°à¹à¸ à¸à¸à¸²à¸ / Unit Rate"])
+    st.markdown("### ⚙️ ตั้งค่าระบบ")
+    tab_t, tab_ct, tab_p = st.tabs(["👥 ทีมผู้รับเหมา", "📋 ประเภทการจ้าง", "🔧 ประเภทงาน / Unit Rate"])
 
-    # ââ helpers for contract type dropdown ââ
+    # ── helpers for contract type dropdown ──
     ct_list   = DB.get('contractTypes', [])
     ct_names  = [c['name'] for c in ct_list]
     ct_ids    = [c['id']   for c in ct_list]
-    ct_opts   = ["â à¹à¸¡à¹à¸£à¸°à¸à¸¸ â"] + ct_names   # index 0 = none
+    ct_opts   = ["— ไม่ระบุ —"] + ct_names   # index 0 = none
 
     def ct_idx(ctid):
         """Return dropdown index for a given contractTypeId (0 = none)."""
@@ -696,132 +692,132 @@ elif PAGE == "settings" and can_settings:
         except: return 0
 
     with tab_t:
-        with st.expander("â à¹à¸à¸´à¹à¸¡à¸à¸µà¸¡à¹à¸«à¸¡à¹", expanded=(not DB['teams'])):
+        with st.expander("➕ เพิ่มทีมใหม่", expanded=(not DB['teams'])):
             with st.form("add_team"):
                 t1,t2 = st.columns(2)
-                with t1: tn = st.text_input("à¸à¸·à¹à¸­à¸à¸µà¸¡ *")
-                with t2: tnote = st.text_input("à¸«à¸¡à¸²à¸¢à¹à¸«à¸à¸¸")
+                with t1: tn = st.text_input("ชื่อทีม *")
+                with t2: tnote = st.text_input("หมายเหตุ")
                 t3,_ = st.columns([1,1])
                 with t3:
                     if ct_opts:
-                        t_ct_sel = st.selectbox("à¸à¸£à¸°à¹à¸ à¸à¸à¸²à¸£à¸à¹à¸²à¸", ct_opts)
+                        t_ct_sel = st.selectbox("ประเภทการจ้าง", ct_opts)
                     else:
-                        st.info("à¸¢à¸±à¸à¹à¸¡à¹à¸¡à¸µà¸à¸£à¸°à¹à¸ à¸à¸à¸²à¸£à¸à¹à¸²à¸ â à¹à¸à¸´à¹à¸¡à¹à¸à¹à¸à¸µà¹ Tab 'à¸à¸£à¸°à¹à¸ à¸à¸à¸²à¸£à¸à¹à¸²à¸'")
-                        t_ct_sel = "â à¹à¸¡à¹à¸£à¸°à¸à¸¸ â"
-                if st.form_submit_button("ð¾ à¸à¸±à¸à¸à¸¶à¸", type="primary"):
-                    if not tn.strip(): st.error("à¸à¸£à¸¸à¸à¸²à¸£à¸°à¸à¸¸à¸à¸·à¹à¸­à¸à¸µà¸¡")
+                        st.info("ยังไม่มีประเภทการจ้าง — เพิ่มได้ที่ Tab 'ประเภทการจ้าง'")
+                        t_ct_sel = "— ไม่ระบุ —"
+                if st.form_submit_button("💾 บันทึก", type="primary"):
+                    if not tn.strip(): st.error("กรุณาระบุชื่อทีม")
                     else:
-                        new_ctid = ct_ids[ct_names.index(t_ct_sel)] if t_ct_sel != "â à¹à¸¡à¹à¸£à¸°à¸à¸¸ â" else ''
+                        new_ctid = ct_ids[ct_names.index(t_ct_sel)] if t_ct_sel != "— ไม่ระบุ —" else ''
                         DB['teams'].append({'id':uid(),'name':tn.strip(),
                                             'contractTypeId':new_ctid,'note':tnote.strip()})
-                        with st.spinner("à¸à¸³à¸¥à¸±à¸à¸à¸±à¸à¸à¸¶à¸..."): save_db("teams")
-                        st.success("â à¸à¸±à¸à¸à¸¶à¸à¸à¸µà¸¡à¸ªà¸³à¹à¸£à¹à¸"); st.rerun()
+                        with st.spinner("กำลังบันทึก..."): save_db("teams")
+                        st.success("✅ บันทึกทีมสำเร็จ"); st.rerun()
         st.markdown("---")
-        if not DB['teams']: st.info("à¸¢à¸±à¸à¹à¸¡à¹à¸¡à¸µà¸à¸µà¸¡")
+        if not DB['teams']: st.info("ยังไม่มีทีม")
         for t in DB['teams']:
             ct_name_disp = get_contract_type(t.get('contractTypeId','')).get('name','-') if t.get('contractTypeId') else '-'
-            with st.expander(f"**{t['name']}** â {ct_name_disp} â {t.get('note','-')}"):
+            with st.expander(f"**{t['name']}** — {ct_name_disp} — {t.get('note','-')}"):
                 e1,e2 = st.columns(2)
-                with e1: nn = st.text_input("à¸à¸·à¹à¸­à¸à¸µà¸¡", value=t['name'], key=f"tn_{t['id']}")
-                with e2: nnt = st.text_input("à¸«à¸¡à¸²à¸¢à¹à¸«à¸à¸¸", value=t.get('note',''), key=f"tnote_{t['id']}")
+                with e1: nn = st.text_input("ชื่อทีม", value=t['name'], key=f"tn_{t['id']}")
+                with e2: nnt = st.text_input("หมายเหตุ", value=t.get('note',''), key=f"tnote_{t['id']}")
                 e3,_ = st.columns([1,1])
                 with e3:
-                    nct_sel = st.selectbox("à¸à¸£à¸°à¹à¸ à¸à¸à¸²à¸£à¸à¹à¸²à¸", ct_opts,
+                    nct_sel = st.selectbox("ประเภทการจ้าง", ct_opts,
                                            index=ct_idx(t.get('contractTypeId','')),
                                            key=f"tct_{t['id']}")
                 b1,b2 = st.columns(2)
                 with b1:
-                    if st.button("ð¾ à¸à¸±à¸à¸à¸¶à¸", key=f"ts_{t['id']}", use_container_width=True):
+                    if st.button("💾 บันทึก", key=f"ts_{t['id']}", use_container_width=True):
                         t['name'] = nn; t['note'] = nnt
-                        t['contractTypeId'] = ct_ids[ct_names.index(nct_sel)] if nct_sel != "â à¹à¸¡à¹à¸£à¸°à¸à¸¸ â" else ''
-                        with st.spinner("à¸à¸³à¸¥à¸±à¸à¸à¸±à¸à¸à¸¶à¸..."): save_db("teams")
-                        st.success("à¸à¸±à¸à¸à¸¶à¸à¹à¸¥à¹à¸§"); st.rerun()
+                        t['contractTypeId'] = ct_ids[ct_names.index(nct_sel)] if nct_sel != "— ไม่ระบุ —" else ''
+                        with st.spinner("กำลังบันทึก..."): save_db("teams")
+                        st.success("บันทึกแล้ว"); st.rerun()
                 with b2:
-                    if st.button("ðï¸ à¸¥à¸", key=f"td_{t['id']}", use_container_width=True):
+                    if st.button("🗑️ ลบ", key=f"td_{t['id']}", use_container_width=True):
                         DB['teams'] = [x for x in DB['teams'] if x['id']!=t['id']]
-                        with st.spinner("à¸à¸³à¸¥à¸±à¸à¸à¸±à¸à¸à¸¶à¸..."): save_db("teams")
+                        with st.spinner("กำลังบันทึก..."): save_db("teams")
                         st.rerun()
 
-    # ââââââââââââââââââââââââââââââââââââââââ
-    # TAB: à¸à¸£à¸°à¹à¸ à¸à¸à¸²à¸£à¸à¹à¸²à¸
-    # ââââââââââââââââââââââââââââââââââââââââ
+    # ═══════════════════════════════════════
+    # TAB: ประเภทการจ้าง
+    # ═════════════════════════════════════════
     with tab_ct:
-        with st.expander("â à¹à¸à¸´à¹à¸¡à¸à¸£à¸°à¹à¸ à¸à¸à¸²à¸£à¸à¹à¸²à¸à¹à¸«à¸¡à¹", expanded=(not ct_list)):
+        with st.expander("➕ เพิ่มประเภทการจ้างใหม่", expanded=(not ct_list)):
             with st.form("add_ct"):
                 ct1, ct2 = st.columns(2)
-                with ct1: ctn = st.text_input("à¸à¸·à¹à¸­à¸à¸£à¸°à¹à¸ à¸à¸à¸²à¸£à¸à¹à¸²à¸ * (à¹à¸à¹à¸ à¸à¸£à¸´à¸©à¸±à¸, à¸à¸£à¸¡)")
+                with ct1: ctn = st.text_input("ชื่อประเภทการจ้าง * (เช่น บริษัท, ผรม)")
                 with ct2:
                     cm_opts  = list(CALC_MODES.values())
                     cm_keys  = list(CALC_MODES.keys())
-                    ctm_sel  = st.selectbox("à¸§à¸´à¸à¸µà¸à¸³à¸à¸§à¸ *", cm_opts)
-                if st.form_submit_button("ð¾ à¸à¸±à¸à¸à¸¶à¸", type="primary"):
-                    if not ctn.strip(): st.error("à¸à¸£à¸¸à¸à¸²à¸£à¸°à¸à¸¸à¸à¸·à¹à¸­à¸à¸£à¸°à¹à¸ à¸à¸à¸²à¸£à¸à¹à¸²à¸")
+                    ctm_sel  = st.selectbox("วิธีคำนวณ *", cm_opts)
+                if st.form_submit_button("💾 บันทึก", type="primary"):
+                    if not ctn.strip(): st.error("กรุณาระบุชื่อประเภทการจ้าง")
                     else:
                         new_cm = cm_keys[cm_opts.index(ctm_sel)]
                         DB.setdefault('contractTypes', []).append(
                             {'id':uid(),'name':ctn.strip(),'calcMode':new_cm})
-                        with st.spinner("à¸à¸³à¸¥à¸±à¸à¸à¸±à¸à¸à¸¶à¸..."): save_db("contractTypes")
-                        st.success("â à¸à¸±à¸à¸à¸¶à¸à¸ªà¸³à¹à¸£à¹à¸"); st.rerun()
+                        with st.spinner("กำลังบันทึก..."): save_db("contractTypes")
+                        st.success("✅ บันทึกสำเร็จ"); st.rerun()
         st.markdown("---")
         if not ct_list:
-            st.info("à¸¢à¸±à¸à¹à¸¡à¹à¸¡à¸µà¸à¸£à¸°à¹à¸ à¸à¸à¸²à¸£à¸à¹à¸²à¸ â à¸à¸ â à¹à¸à¸´à¹à¸¡à¸à¸£à¸°à¹à¸ à¸à¸à¸²à¸£à¸à¹à¸²à¸à¹à¸«à¸¡à¹")
+            st.info("ยังไม่มีประเภทการจ้าง — กด ➕ เพิ่มประเภทการจ้างใหม่")
         for ct in ct_list:
             cm_label = CALC_MODES.get(ct.get('calcMode','unit_rate'), '-')
-            with st.expander(f"**{ct['name']}** â {cm_label}"):
+            with st.expander(f"**{ct['name']}** — {cm_label}"):
                 ec1, ec2 = st.columns(2)
-                with ec1: nctn = st.text_input("à¸à¸·à¹à¸­", value=ct['name'], key=f"ctn_{ct['id']}")
+                with ec1: nctn = st.text_input("ชื่อ", value=ct['name'], key=f"ctn_{ct['id']}")
                 with ec2:
                     cur_cm_idx = cm_keys.index(ct.get('calcMode','unit_rate')) if ct.get('calcMode') in cm_keys else 0
-                    nctm_sel   = st.selectbox("à¸§à¸´à¸à¸µà¸à¸³à¸à¸§à¸", cm_opts, index=cur_cm_idx, key=f"ctm_{ct['id']}")
+                    nctm_sel   = st.selectbox("วิธีคำนวณ", cm_opts, index=cur_cm_idx, key=f"ctm_{ct['id']}")
                 eb1, eb2 = st.columns(2)
                 with eb1:
-                    if st.button("ð¾ à¸à¸±à¸à¸à¸¶à¸", key=f"cts_{ct['id']}", use_container_width=True):
+                    if st.button("💾 บันทึก", key=f"cts_{ct['id']}", use_container_width=True):
                         ct['name']     = nctn
                         ct['calcMode'] = cm_keys[cm_opts.index(nctm_sel)]
-                        with st.spinner("à¸à¸³à¸¥à¸±à¸à¸à¸±à¸à¸à¸¶à¸..."): save_db("contractTypes")
-                        st.success("à¸à¸±à¸à¸à¸¶à¸à¹à¸¥à¹à¸§"); st.rerun()
+                        with st.spinner("กำลังบันทึก..."): save_db("contractTypes")
+                        st.success("บันทึกแล้ว"); st.rerun()
                 with eb2:
-                    if st.button("ðï¸ à¸¥à¸", key=f"ctd_{ct['id']}", use_container_width=True):
+                    if st.button("🗑️ ลบ", key=f"ctd_{ct['id']}", use_container_width=True):
                         DB['contractTypes'] = [x for x in DB['contractTypes'] if x['id']!=ct['id']]
-                        with st.spinner("à¸à¸³à¸¥à¸±à¸à¸à¸±à¸à¸à¸¶à¸..."): save_db("contractTypes")
+                        with st.spinner("กำลังบันทึก..."): save_db("contractTypes")
                         st.rerun()
 
     with tab_p:
-        with st.expander("â à¹à¸à¸´à¹à¸¡à¸à¸£à¸°à¹à¸ à¸à¸à¸²à¸à¹à¸«à¸¡à¹", expanded=(not DB['projects'])):
+        with st.expander("➕ เพิ่มประเภทงานใหม่", expanded=(not DB['projects'])):
             with st.form("add_proj"):
                 p1,p2 = st.columns(2)
-                with p1: pn = st.text_input("à¸à¸·à¹à¸­à¸à¸²à¸ *")
-                with p2: pd2 = st.text_input("à¸à¸³à¸­à¸à¸´à¸à¸²à¸¢")
+                with p1: pn = st.text_input("ชื่องาน *")
+                with p2: pd2 = st.text_input("คำอธิบาย")
                 p3,p4 = st.columns(2)
-                with p3: pu = st.text_input("à¸«à¸à¹à¸§à¸¢ * (à¹à¸à¹à¸ à¸¡., kg)")
-                with p4: pr = st.number_input("Unit Rate (à¸¿/à¸«à¸à¹à¸§à¸¢)", min_value=0.0, step=0.01)
-                if st.form_submit_button("ð¾ à¸à¸±à¸à¸à¸¶à¸", type="primary"):
+                with p3: pu = st.text_input("หน่วย * (เช่น ม., kg)")
+                with p4: pr = st.number_input("Unit Rate (฿/หน่วย)", min_value=0.0, step=0.01)
+                if st.form_submit_button("💾 บันทึก", type="primary"):
                     if not pn.strip() or not pu.strip():
-                        st.error("à¸à¸£à¸¸à¸à¸²à¸à¸£à¸­à¸à¸à¹à¸­à¸¡à¸¹à¸¥à¹à¸«à¹à¸à¸£à¸")
+                        st.error("กรุณากรอกข้อมูลให้ครบ")
                     else:
                         DB['projects'].append({'id':uid(),'name':pn.strip(),'unit':pu.strip(),
                                                'unitRate':pr,'description':pd2.strip()})
-                        with st.spinner("à¸à¸³à¸¥à¸±à¸à¸à¸±à¸à¸à¸¶à¸..."): save_db("projects")
-                        st.success("â à¸à¸±à¸à¸à¸¶à¸à¸ªà¸³à¹à¸£à¹à¸"); st.rerun()
+                        with st.spinner("กำลังบันทึก..."): save_db("projects")
+                        st.success("✅ บันทึกสำเร็จ"); st.rerun()
         st.markdown("---")
-        if not DB['projects']: st.info("à¸¢à¸±à¸à¹à¸¡à¹à¸¡à¸µà¸à¸£à¸°à¹à¸ à¸à¸à¸²à¸")
+        if not DB['projects']: st.info("ยังไม่มีประเภทงาน")
         for p in DB['projects']:
-            with st.expander(f"**{p['name']}** â {p['unit']} â à¸¿{N(p['unitRate'])}/à¸«à¸à¹à¸§à¸¢"):
+            with st.expander(f"**{p['name']}** — {p['unit']} — ฿{N(p['unitRate'])}/หน่วย"):
                 e1,e2,e3 = st.columns([2,1,1])
                 with e1:
-                    npn = st.text_input("à¸à¸·à¹à¸­à¸à¸²à¸", value=p['name'], key=f"pn_{p['id']}")
-                    npd = st.text_input("à¸à¸³à¸­à¸à¸´à¸à¸²à¸¢", value=p.get('description',''), key=f"pd_{p['id']}")
-                with e2: npu = st.text_input("à¸«à¸à¹à¸§à¸¢", value=p['unit'], key=f"pu_{p['id']}")
+                    npn = st.text_input("ชื่องาน", value=p['name'], key=f"pn_{p['id']}")
+                    npd = st.text_input("คำอธิบาย", value=p.get('description',''), key=f"pd_{p['id']}")
+                with e2: npu = st.text_input("หน่วย", value=p['unit'], key=f"pu_{p['id']}")
                 with e3: npr = st.number_input("Unit Rate", value=_f(p['unitRate']),
                                                min_value=0.0, step=0.01, key=f"pr_{p['id']}")
                 b1,b2 = st.columns(2)
                 with b1:
-                    if st.button("ð¾ à¸à¸±à¸à¸à¸¶à¸", key=f"ps_{p['id']}", use_container_width=True):
+                    if st.button("💾 บันทึก", key=f"ps_{p['id']}", use_container_width=True):
                         p['name']=npn; p['unit']=npu; p['unitRate']=npr; p['description']=npd
-                        with st.spinner("à¸à¸³à¸¥à¸±à¸à¸à¸±à¸à¸à¸¶à¸..."): save_db("projects")
-                        st.success("à¸à¸±à¸à¸à¸¶à¸à¹à¸¥à¹à¸§"); st.rerun()
+                        with st.spinner("กำลังบันทึก..."): save_db("projects")
+                        st.success("บันทึกแล้ว"); st.rerun()
                 with b2:
-                    if st.button("ðï¸ à¸¥à¸", key=f"pd_{p['id']}", use_container_width=True):
+                    if st.button("🗑️ ลบ", key=f"pd_{p['id']}", use_container_width=True):
                         DB['projects'] = [x for x in DB['projects'] if x['id']!=p['id']]
-                        with st.spinner("à¸à¸³à¸¥à¸±à¸à¸à¸±à¸à¸à¸¶à¸..."): save_db("projects")
+                        with st.spinner("กำลังบันทึก..."): save_db("projects")
                         st.rerun()
