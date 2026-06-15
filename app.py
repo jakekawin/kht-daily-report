@@ -20,7 +20,7 @@ ROLE_ADMIN = "admin"
 ROLE_SUPER = "supervisor"
 ROLE_VIEW  = "viewer"
 TH_MO   = ['','มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน',
-            'กรกฎาคม','ส���งหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม']
+            'กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม']
 TH_MO_S = ['','ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.',
             'ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.']
 SHEET_HEADERS = {
@@ -324,7 +324,7 @@ if PAGE == "dashboard":
         c1,c2,c3,c4 = st.columns(4)
         with c1: st.metric("📅 ยอดวันนี้",   f"฿ {N(today_tot)}")
         with c2: st.metric("📆 ยอดงวดนี้",   f"฿ {N(period_tot)}")
-        with c3: st.metric("🗓️ ยอดเดือนนี้", f"฿ {6(month_tot)}")
+        with c3: st.metric("🗓️ ยอดเดือนนี้", f"฿ {N(month_tot)}")
         with c4: st.metric("⚠️ ค้างชำระ",    f"฿ {N(unpaid)}")
     else:
         c1,c2,c3 = st.columns(3)
