@@ -70,6 +70,12 @@ def _i(v):
     except: return 0
 
 def uid(): return str(uuid.uuid4())[:8]
+
+def next_id(table):
+    """Return next sequential integer ID for a table (as string: '1','2','3',...)"""
+    records = st.session_state.db.get(table, []) if 'db' in st.session_state else []
+    nums = [int(r['id']) for r in records if str(r.get('id', '')).isdigit()]
+    return str(max(nums) + 1) if nums else "1"
 def N(n):  return f"{float(n or 0):,.2f}"
 def today_str(): return date.today().isoformat()
 
@@ -667,7 +673,7 @@ elif PAGE == "add" and can_edit:
             if r_workers <= 0:
                 st.error("กรุณาระบุตำแหน่งงานอย่างน้อย 1 ตำแหน่ง และจำนวนคนงาน")
             else:
-                _rid = st.session_state.edit_id or uid()
+                _rid = st.session_state.edit_id or next_id('reports')
                 if new_photos:
                     with st.spinner(f"กำลังอัปโหลดรูปภาพ {len(new_photos)} รูป..."):
                         for _uf in new_photos:
@@ -783,7 +789,7 @@ elif PAGE == "add" and can_edit:
                 st.error("กรุณาระบุปริมาณงานให้ครบทุกรายการ")
             else:
                 total = sum(w['amt'] for w in st.session_state.wi)
-                _rid = st.session_state.edit_id or uid()
+                _rid = st.session_state.edit_id or next_id('reports')
                 if new_photos:
                     with st.spinner(f"กำลังอัปโหลดรูปภาพ {len(new_photos)} รูป..."):
                         for _uf in new_photos:
@@ -989,7 +995,7 @@ elif PAGE == "summary" and can_summary:
                     pd_inp = st.date_input("วันที่จ่าย", value=date.today())
                     pn_inp = st.text_input("หมายเหตุ")
                     if st.form_submit_button("✅ ยืนยัน"):
-                        prec = {'id':uid(),'tid':t['id'],'y':yr2,'mo':mo2,'p':period,
+                        prec = {'id':next_id('payments'),'tid':t['id'],'y':yr2,'mo':mo2,'p':period,
                                 'paid':True,'paidDate':pd_inp.isoformat(),'note':pn_inp}
                         idx3 = next((i for i,px in enumerate(DB['payments'])
                                      if px['tid']==t['id'] and _i(px['y'])==yr2 and
@@ -1070,7 +1076,7 @@ elif PAGE == "settings" and can_settings:
                     if not tn.strip(): st.error("กรุณาระบุชื่อทีม")
                     else:
                         new_ctid = ct_ids[ct_names.index(t_ct_sel)] if t_ct_sel != "— ไม่ระบุ —" else ''
-                        DB['teams'].append({'id':uid(),'name':tn.strip(),
+                        DB['teams'].append({'id':next_id('teams'),'name':tn.strip(),
                                             'contractTypeId':new_ctid,'note':tnote.strip(),
                                             'active': '0' if 'Offline' in t_active else '1'})
                         with st.spinner("กำลังบันทึก..."): save_db("teams")
@@ -1128,7 +1134,7 @@ elif PAGE == "settings" and can_settings:
                     else:
                         new_cm = cm_keys[cm_opts.index(ctm_sel)]
                         DB.setdefault('contractTypes', []).append(
-                            {'id':uid(),'name':ctn.strip(),'calcMode':new_cm,'manRate':ct_mr})
+                            {'id':next_id('contractTypes'),'name':ctn.strip(),'calcMode':new_cm,'manRate':ct_mr})
                         with st.spinner("กำลังบันทึก..."): save_db("contractTypes")
                         st.success("✅ บันทึกสำเร็จ"); st.rerun()
         st.markdown("---")
@@ -1174,7 +1180,7 @@ elif PAGE == "settings" and can_settings:
                     if not pn.strip() or not pu.strip():
                         st.error("กรุณากรอกข้อมูลให้ครบ")
                     else:
-                        DB['projects'].append({'id':uid(),'name':pn.strip(),'unit':pu.strip(),
+                        DB['projects'].append({'id':next_id('projects'),'name':pn.strip(),'unit':pu.strip(),
                                                'unitRate':pr,'description':pd2.strip(),
                                                'active': '0' if 'Offline' in p_active else '1'})
                         with st.spinner("กำลังบันทึก..."): save_db("projects")
@@ -1226,7 +1232,7 @@ elif PAGE == "settings" and can_settings:
                         st.error("กรุณาระบุชื่อตำแหน่ง")
                     else:
                         DB.setdefault('positions', []).append(
-                            {'id': uid(), 'name': pos_name.strip(), 'dailyRate': pos_rate})
+                            {'id': next_id('positions'), 'name': pos_name.strip(), 'dailyRate': pos_rate})
                         with st.spinner("กำลังบันทึก..."): save_db("positions")
                         st.success("✅ บันทึกสำเร็จ"); st.rerun()
         st.markdown("---")
