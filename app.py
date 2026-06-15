@@ -1439,7 +1439,7 @@ elif PAGE == "productivity":
             st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
         return rows
 
-    def _render_summary(rpts_f, label):
+    def _render_summary(rpts_f, label, f_proj="ทุกประเภทงาน"):
         """สรุปรายทีม + รายประเภทงาน + metrics"""
         if not rpts_f:
             st.info("ไม่มีข้อมูลในช่วงที่เลือก")
@@ -1524,7 +1524,11 @@ elif PAGE == "productivity":
             st.info("ยังไม่มีรายการงานที่บันทึก")
 
         # ── Target vs Actual (ยอดสะสมทั้งโครงการ) ────────────────────────
-        projs_with_target = [p for p in DB['projects'] if _f(p.get('target', 0)) > 0]
+        projs_with_target = [
+            p for p in DB['projects']
+            if _f(p.get('target', 0)) > 0
+            and (f_proj == "ทุกประเภทงาน" or p['name'] == f_proj)
+        ]
         if projs_with_target:
             st.markdown("---")
             st.markdown("#### 🎯 Target vs Actual (ยอดสะสมทั้งโครงการ)")
@@ -1618,7 +1622,7 @@ elif PAGE == "productivity":
         if rpts_day:
             _render_detail_table(rpts_day, fp_day)
             st.markdown("---")
-            _render_summary(rpts_day, thd(day_str))
+            _render_summary(rpts_day, thd(day_str), fp_day)
         else:
             st.info("ไม่มีข้อมูลในวันที่เลือก")
 
@@ -1657,7 +1661,7 @@ elif PAGE == "productivity":
                 with st.expander("📋 รายละเอียดรายวัน", expanded=False):
                     _render_detail_table(rpts_rng, fp_rng)
                 st.markdown("---")
-                _render_summary(rpts_rng, f"{thd(fs)} – {thd(fe)}")
+                _render_summary(rpts_rng, f"{thd(fs)} – {thd(fe)}", fp_rng)
             else:
                 st.info("ไม่มีข้อมูลในช่วงที่เลือก")
 
@@ -1698,6 +1702,6 @@ elif PAGE == "productivity":
             with st.expander("📋 รายละเอียดรายวัน", expanded=False):
                 _render_detail_table(rpts_per, fp_per)
             st.markdown("---")
-            _render_summary(rpts_per, period_lbl)
+            _render_summary(rpts_per, period_lbl, fp_per)
         else:
             st.info("ไม่มีข้อมูลในงวดที่เลือก")
