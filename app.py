@@ -269,7 +269,8 @@ def login_page():
 # ─── SESSION STATE INIT ───────────────────────────────
 for k, v in [('logged_in', False), ('role', None), ('wi', []),
               ('pos_items', []), ('photos', []), ('upload_key', 0),
-              ('_photo_edit', None), ('edit_id', None), ('page_key', None)]:
+              ('_photo_edit', None), ('edit_id', None), ('page_key', None),
+              ('_save_msg', None)]:
     if k not in st.session_state:
         st.session_state[k] = v
 
@@ -435,6 +436,9 @@ if PAGE == "dashboard":
 # PAGE: ADD / EDIT REPORT
 # ═══════════════════════════════════════════════════════
 elif PAGE == "add" and can_edit:
+    if st.session_state.get('_save_msg'):
+        st.toast(st.session_state['_save_msg'], icon="✅")
+        st.session_state['_save_msg'] = None
     st.markdown("### ➕ บันทึกงานประจำวัน")
 
     edit_rec = None
@@ -692,7 +696,7 @@ elif PAGE == "add" and can_edit:
                         DB['reports'].append(rec)
                         msg = "✅ บันทึกสำเร็จ"
                     save_db("reports")
-                st.success(msg)
+                st.session_state['_save_msg'] = msg
                 st.session_state.pos_items = []
                 st.session_state.photos = []
                 st.session_state['_photo_edit'] = None
@@ -805,7 +809,7 @@ elif PAGE == "add" and can_edit:
                         DB['reports'].append(rec)
                         msg = "✅ บันทึกสำเร็จ"
                     save_db("reports")
-                st.success(msg)
+                st.session_state['_save_msg'] = msg
                 st.session_state.wi = []
                 st.session_state.photos = []
                 st.session_state['_photo_edit'] = None
