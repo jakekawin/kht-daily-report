@@ -436,9 +436,6 @@ if PAGE == "dashboard":
 # PAGE: ADD / EDIT REPORT
 # ═══════════════════════════════════════════════════════
 elif PAGE == "add" and can_edit:
-    if st.session_state.get('_save_msg'):
-        st.toast(st.session_state['_save_msg'], icon="✅")
-        st.session_state['_save_msg'] = None
     st.markdown("### ➕ บันทึกงานประจำวัน")
 
     edit_rec = None
@@ -702,6 +699,7 @@ elif PAGE == "add" and can_edit:
                 st.session_state['_photo_edit'] = None
                 st.session_state['upload_key'] = st.session_state.get('upload_key', 0) + 1
                 st.session_state.edit_id = None
+                st.session_state.page_key = "🔍 ดูข้อมูลรายวัน"
                 st.rerun()
 
     else:
@@ -815,12 +813,16 @@ elif PAGE == "add" and can_edit:
                 st.session_state['_photo_edit'] = None
                 st.session_state['upload_key'] = st.session_state.get('upload_key', 0) + 1
                 st.session_state.edit_id = None
+                st.session_state.page_key = "🔍 ดูข้อมูลรายวัน"
                 st.rerun()
 
 # ═══════════════════════════════════════════════════════
 # PAGE: VIEW REPORTS
 # ═══════════════════════════════════════════════════════
 elif PAGE == "view":
+    if st.session_state.get('_save_msg'):
+        st.toast(st.session_state['_save_msg'], icon="✅")
+        st.session_state['_save_msg'] = None
     st.markdown("### 🔍 ดูข้อมูลรายวัน")
 
     fc1,fc2,fc3 = st.columns([1.5,1,1])
