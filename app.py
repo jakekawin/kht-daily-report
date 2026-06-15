@@ -678,7 +678,7 @@ elif PAGE == "summary" and can_summary:
                  and r['date'].startswith(f"{yr2}-{m_str}")]
         tot    = sum(_f(r['total']) for r in trpts)
         manday = sum(_i(r['workers']) for r in trpts)
-        total_qty_t = sum(_f(it['qty']) for in in trpts for it in r['items'])
+        total_qty_t = sum(_f(it['qty']) for r in trpts for it in r['items'])
         pd_tot = 0.0
         for pp in [1,2]:
             pay = get_payment(t['id'], yr2, mo2, pp)
