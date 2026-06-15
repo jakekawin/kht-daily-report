@@ -270,7 +270,7 @@ def login_page():
 for k, v in [('logged_in', False), ('role', None), ('wi', []),
               ('pos_items', []), ('photos', []), ('upload_key', 0),
               ('_photo_edit', None), ('edit_id', None), ('page_key', None),
-              ('_save_msg', None)]:
+              ('_save_msg', None), ('_sidebar_nav', None)]:
     if k not in st.session_state:
         st.session_state[k] = v
 
@@ -303,6 +303,9 @@ if can_settings:pages_map["⚙️ ตั้งค่าระบบ"]      = "se
 # Validate stored page_key
 if st.session_state.page_key not in pages_map:
     st.session_state.page_key = list(pages_map.keys())[0]
+# Sync sidebar radio with page_key on first load or when invalid
+if st.session_state.get('_sidebar_nav') not in pages_map:
+    st.session_state['_sidebar_nav'] = st.session_state.page_key
 
 with st.sidebar:
     st.markdown(f"""
@@ -314,9 +317,8 @@ with st.sidebar:
     </div>
     """, unsafe_allow_html=True)
 
-    cur_idx = list(pages_map.keys()).index(st.session_state.page_key)
     chosen  = st.radio("เมนู", list(pages_map.keys()),
-                        index=cur_idx, label_visibility="collapsed")
+                        key="_sidebar_nav", label_visibility="collapsed")
     st.session_state.page_key = chosen
     PAGE = pages_map[chosen]
 
@@ -334,7 +336,7 @@ with st.sidebar:
 
     st.markdown("---")
     if st.button("🚪 ออกจากระบบ", use_container_width=True):
-        for k in ['logged_in','role','db','wi','edit_id','page_key']:
+        for k in ['logged_in','role','db','wi','edit_id','page_key','_sidebar_nav']:
             st.session_state.pop(k, None)
         st.rerun()
 
@@ -700,6 +702,7 @@ elif PAGE == "add" and can_edit:
                 st.session_state['upload_key'] = st.session_state.get('upload_key', 0) + 1
                 st.session_state.edit_id = None
                 st.session_state.page_key = "🔍 ดูข้อมูลรายวัน"
+                st.session_state['_sidebar_nav'] = "🔍 ดูข้อมูลรายวัน"
                 st.rerun()
 
     else:
@@ -814,6 +817,7 @@ elif PAGE == "add" and can_edit:
                 st.session_state['upload_key'] = st.session_state.get('upload_key', 0) + 1
                 st.session_state.edit_id = None
                 st.session_state.page_key = "🔍 ดูข้อมูลรายวัน"
+                st.session_state['_sidebar_nav'] = "🔍 ดูข้อมูลรายวัน"
                 st.rerun()
 
 # ═══════════════════════════════════════════════════════
@@ -902,7 +906,11 @@ elif PAGE == "view":
                             if st.button("✏️ แก้ไข", key=f"ed_{r['id']}"):
                                 st.session_state.edit_id = r['id']
                                 st.session_state.wi = []
+                                st.session_state.pos_items = []
+                                st.session_state.photos = []
+                                st.session_state['_photo_edit'] = None
                                 st.session_state.page_key = "➕ บันทึกงานประจำวัน"
+                                st.session_state['_sidebar_nav'] = "➕ บันทึกงานประจำวัน"
                                 st.rerun()
                         with eb2:
                             if st.button("🗑️ ลบ", key=f"dl_{r['id']}"):
