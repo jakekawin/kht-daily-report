@@ -738,7 +738,7 @@ elif PAGE == "settings" and can_settings:
                         with st.spinner("กำลังบันทึก..."): save_db("projects")
                         st.success("บันทึกแล้ว"); st.rerun()
                 with b2:
-                    if st.button("🗑️ ลบ", key=f"pd_{p['id']}", use_container_width=True):
+                    if st.button("🗑️ ลบ", key=f"pbd_{p['id']}", use_container_width=True):
                         DB['projects'] = [x for x in DB['projects'] if x['id']!=p['id']]
                         with st.spinner("กำลังบันทึก..."): save_db("projects")
                         st.rerun()
