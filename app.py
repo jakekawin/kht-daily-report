@@ -355,6 +355,33 @@ if PAGE == "dashboard":
             rows.append(row)
         st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
+    # ── Productivity วันนี้ ──────────────────────────────
+    if today_rpts:
+        prod_dict = {}
+        for r in today_rpts:
+            w = _i(r['workers'])
+            if w <= 0: continue
+            for it in r['items']:
+                pid = it['pid']
+                if pid not in prod_dict:
+                    pj = get_proj(pid)
+                    prod_dict[pid] = {'งาน': pj['name'], 'หน่วย': it['unit'], 'qty': 0.0, 'md': 0}
+                prod_dict[pid]['qty'] += _f(it['qty'])
+                prod_dict[pid]['md']  += w
+        if prod_dict:
+            st.markdown("#### 📈 Productivity วันนี้ (unit / คน-วัน)")
+            prod_rows = []
+            for v in prod_dict.values():
+                md = v['md']
+                prod_rows.append({
+                    'ประเภทงาน':                  v['งาน'],
+                    'หน่วย':                      v['หน่วย'],
+                    'ปริมาณรวม':                  N(v['qty']),
+                    'คน-วัน':                     md,
+                    'Productivity (unit/คน-วัน)': f"{v['qty']/md:.2f}" if md > 0 else '-',
+                })
+            st.dataframe(pd.DataFrame(prod_rows), hide_index=True, use_container_width=True)
+
 # ═══════════════════════════════════════════════════════
 # PAGE: ADD / EDIT REPORT
 # ═══════════════════════════════════════════════════════
@@ -528,7 +555,10 @@ elif PAGE == "view":
                     irows = []
                     for it in r['items']:
                         p2 = get_proj(it['pid'])
-                        row2 = {"งาน": p2['name'], "หน่วย": it['unit'], "ปริมาณ": it['qty']}
+                        w_r = _i(r['workers'])
+                        upm = f"{it['qty']/w_r:.2f}" if w_r > 0 else '-'
+                        row2 = {"งาน": p2['name'], "หน่วย": it['unit'],
+                                "ปริมาณ": it['qty'], "unit/คน": upm}
                         if can_see_money:
                             row2["Rate(฿)"] = N(it['rate'])
                             row2["เงิน(฿)"] = N(it['amt'])
@@ -594,7 +624,9 @@ elif PAGE == "summary" and can_summary:
             rc1,rc2,rc3 = st.columns([3,1.5,1.5])
             with rc1:
                 st.markdown(f"**{t['name']}**")
-                st.caption(f"{days} วันทำงาน | {manday} คน-วัน")
+                tot_qty_p = sum(_f(it['qty']) for r in rpts for it in r['items'])
+                prod_p = f"{tot_qty_p/manday:.2f}" if manday > 0 else '-'
+                st.caption(f"{days} วันทำงาน | {manday} คน-วัน | 📈 {prod_p} unit/คน-วัน")
                 if ip: st.caption(f"✅ จ่ายวันที่ {thd(pay.get('paidDate'))} {pay.get('note','')}")
             with rc2:
                 st.metric("", f"฿ {N(tot)}")
@@ -646,6 +678,7 @@ elif PAGE == "summary" and can_summary:
                  and r['date'].startswith(f"{yr2}-{m_str}")]
         tot    = sum(_f(r['total']) for r in trpts)
         manday = sum(_i(r['workers']) for r in trpts)
+        total_qty_t = sum(_f(it['qty']) for in in trpts for it in r['items'])
         pd_tot = 0.0
         for pp in [1,2]:
             pay = get_payment(t['id'], yr2, mo2, pp)
@@ -653,13 +686,14 @@ elif PAGE == "summary" and can_summary:
                 s2,e2 = pdates(yr2, mo2, pp)
                 pd_tot += sum(_f(r['total']) for r in DB['reports']
                               if r['teamId']==t['id'] and s2<=r['date']<=e2)
-        cum_rows.append({"ทีม":t['name'],"คน-วัน":manday,
+        prod_t = f"{total_qty_t/manday:.2f}" if manday > 0 else '-'
+        cum_rows.append({"ทีม":t['name'],"คน-วัน":manday,"Productivity":prod_t,
                          "ยอดรวม(฿)":N(tot),"จ่ายแล้ว(฿)":N(pd_tot),"ค้าง(฿)":N(tot-pd_tot)})
     if cum_rows:
         gt  = sum(_f(r["ยอดรวม(฿)"].replace(',',''))  for r in cum_rows)
         gp  = sum(_f(r["จ่ายแล้ว(฿)"].replace(',','')) for r in cum_rows)
         gmd = sum(r["คน-วัน"] for r in cum_rows)
-        cum_rows.append({"ทีม":"รวมทั้งหมด","คน-วัน":gmd,
+        cum_rows.append({"ทีม":"รวมทั้งหมด","คน-วัน":gmd,"Productivity":"-",
                          "ยอดรวม(฿)":N(gt),"จ่ายแล้ว(฿)":N(gp),"ค้าง(฿)":N(gt-gp)})
         st.dataframe(pd.DataFrame(cum_rows), hide_index=True, use_container_width=True)
     else:
