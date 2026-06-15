@@ -1277,7 +1277,7 @@ elif PAGE == "productivity":
             if items_f:
                 for it in items_f:
                     qty = _f(it.get('qty', 0))
-                    rows.append({
+                    row_d = {
                         "วันที่":           thd(r['date']),
                         "ทีม":              tname,
                         "ประเภทการจ้าง":   ctname,
@@ -1286,10 +1286,12 @@ elif PAGE == "productivity":
                         "ปริมาณ":          qty,
                         "หน่วย":           it.get('unit', ''),
                         "Prod/คน":         round(qty / workers, 3) if workers else 0,
-                        "ต้นทุน (บาท)":   total if total else "—",
-                    })
+                    }
+                    if can_see_money:
+                        row_d["ต้นทุน (บาท)"] = total if total else "—"
+                    rows.append(row_d)
             else:
-                rows.append({
+                row_d = {
                     "วันที่":           thd(r['date']),
                     "ทีม":              tname,
                     "ประเภทการจ้าง":   ctname,
@@ -1298,8 +1300,10 @@ elif PAGE == "productivity":
                     "ปริมาณ":          "—",
                     "หน่วย":           "",
                     "Prod/คน":         "—",
-                    "ต้นทุน (บาท)":   total if total else "—",
-                })
+                }
+                if can_see_money:
+                    row_d["ต้นทุน (บาท)"] = total if total else "—"
+                rows.append(row_d)
         if rows:
             st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
         return rows
@@ -1315,11 +1319,14 @@ elif PAGE == "productivity":
         total_days    = len(set(r['date'] for r in rpts_f))
         total_records = len(rpts_f)
 
-        mc1, mc2, mc3, mc4 = st.columns(4)
+        if can_see_money:
+            mc1, mc2, mc3, mc4 = st.columns(4)
+            mc4.metric("💰 ต้นทุนรวม", f"{total_cost:,.0f} ฿")
+        else:
+            mc1, mc2, mc3 = st.columns(3)
         mc1.metric("📋 รายงาน", f"{total_records} รายการ")
         mc2.metric("📅 วันทำงาน", f"{total_days} วัน")
         mc3.metric("👷 Man-days รวม", f"{total_workers:,}")
-        mc4.metric("💰 ต้นทุนรวม", f"{total_cost:,.0f} ฿")
 
         # ── สรุปรายทีม ──
         st.markdown("---")
@@ -1345,13 +1352,15 @@ elif PAGE == "productivity":
                 f"{k}: {round(v2['qty'],1)} {v2['unit']}"
                 for k, v2 in v["items"].items()
             ) or "—"
-            t_rows.append({
+            t_row = {
                 "ทีม":                 tname,
                 "วันทำงาน":           len(v["days"]),
                 "Man-days รวม":        v["workers"],
-                "ต้นทุน (บาท)":       round(v["cost"], 0),
-                "รายการงาน":          items_str,
-            })
+            }
+            if can_see_money:
+                t_row["ต้นทุน (บาท)"] = round(v["cost"], 0)
+            t_row["รายการงาน"] = items_str
+            t_rows.append(t_row)
         if t_rows:
             st.dataframe(pd.DataFrame(t_rows), hide_index=True, use_container_width=True)
 
