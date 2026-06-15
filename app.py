@@ -680,7 +680,7 @@ elif PAGE == "add" and can_edit:
                     'note':     r_note,
                     'items':    [dict(w) for w in st.session_state.wi],
                     'posItems': json.dumps([dict(pi) for pi in st.session_state.pos_items]),
-                    'photos':   json.dumps(st.session_state.photos, ensure_ascii=False),
+                    'photos':   list(st.session_state.photos),
                     'total':    auto_total,
                 }
                 with st.spinner("กำลังบันทึก..."):
@@ -793,7 +793,7 @@ elif PAGE == "add" and can_edit:
                     'note':     r_note,
                     'items':    [dict(w) for w in st.session_state.wi],
                     'posItems': json.dumps([]),
-                    'photos':   json.dumps(st.session_state.photos, ensure_ascii=False),
+                    'photos':   list(st.session_state.photos),
                     'total':    total,
                 }
                 with st.spinner("กำลังบันทึก..."):
