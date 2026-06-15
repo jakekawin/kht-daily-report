@@ -478,7 +478,7 @@ elif PAGE == "add" and can_edit:
         for _i_ph, _ph in enumerate(st.session_state.photos):
             with _ph_cols[_i_ph % 3]:
                 try:
-                    st.image(_ph.get('thumb', _ph.get('url','')), use_container_width=True)
+                    st.image(_ph.get('url') or _ph.get('thumb', ''), use_container_width=True)
                 except:
                     st.caption(_ph.get('name', f"รูป {_i_ph+1}"))
                 st.caption(_ph.get('name',''))
@@ -856,7 +856,7 @@ elif PAGE == "view":
                         for _i2, _ph2 in enumerate(_ph_list):
                             with _ph_cols2[_i2 % 3]:
                                 if isinstance(_ph2, dict):
-                                    _img_url = _ph2.get('thumb') or _ph2.get('url', '')
+                                    _img_url = _ph2.get('url') or _ph2.get('thumb', '')
                                     _cap = _ph2.get('name', f"รูป {_i2+1}")
                                 elif isinstance(_ph2, str) and _ph2.startswith('http'):
                                     _img_url, _cap = _ph2, f"รูป {_i2+1}"
