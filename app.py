@@ -60,39 +60,33 @@ st.markdown("""
 
   /* ── Mobile responsive ── */
   @media (max-width: 768px) {
-    /* Stack columns vertically on small screens */
-    [data-testid="column"] {
-      width: 100% !important;
-      min-width: 100% !important;
-      flex: 1 1 100% !important;
-    }
     /* More breathing room for content */
     .block-container {
       padding-left: 0.8rem !important;
       padding-right: 0.8rem !important;
-      padding-top: 1rem !important;
+      padding-top: 0.5rem !important;
     }
-    /* Bigger touch targets for buttons */
-    button {
-      min-height: 48px !important;
-      font-size: 1rem !important;
-    }
-    /* Full-width sidebar overlay on mobile */
-    [data-testid="stSidebar"] {
-      min-width: 80vw !important;
-      max-width: 90vw !important;
-    }
-    /* Number inputs & text inputs easier to tap */
+    /* Number inputs & text inputs easier to tap — prevent iOS auto-zoom */
     input, select, textarea {
       font-size: 16px !important;
     }
-    /* Metric cards: 1 per row */
+    /* Metric cards spacing */
     div[data-testid="stMetric"] {
       margin-bottom: 0.5rem;
     }
     /* ซ่อน sidebar บนมือถือ (top nav ทำหน้าที่แทน) */
     section[data-testid="stSidebar"] { display: none !important; }
     [data-testid="collapsedControl"]  { display: none !important; }
+    /* Top nav bar — keep 3 items on one row, compact height */
+    [data-testid="stHorizontalBlock"]:first-of-type [data-testid="column"] {
+      flex: 1 1 0 !important;
+      min-width: 0 !important;
+      width: auto !important;
+    }
+    [data-testid="stHorizontalBlock"]:first-of-type button {
+      min-height: 40px !important;
+      padding: 0 4px !important;
+    }
   }
 </style>
 """, unsafe_allow_html=True)
