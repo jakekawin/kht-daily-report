@@ -356,7 +356,7 @@ def login_page():
 for k, v in [('logged_in', False), ('role', None), ('wi', []),
               ('pos_items', []), ('photos', []), ('upload_key', 0),
               ('_photo_edit', None), ('edit_id', None), ('page_key', None),
-              ('_save_msg', None), ('_sidebar_nav', None)]:
+              ('_save_msg', None), ('_sidebar_nav', None), ('_pending_nav', None)]:
     if k not in st.session_state:
         st.session_state[k] = v
 
@@ -392,6 +392,10 @@ if st.session_state.page_key not in pages_map:
 # Sync sidebar radio with page_key on first load or when invalid
 if st.session_state.get('_sidebar_nav') not in pages_map:
     st.session_state['_sidebar_nav'] = st.session_state.page_key
+# Apply pending programmatic navigation BEFORE the radio widget is created
+if st.session_state.get('_pending_nav') in pages_map:
+    st.session_state['_sidebar_nav'] = st.session_state['_pending_nav']
+    st.session_state['_pending_nav'] = None
 
 with st.sidebar:
     st.markdown(f"""
@@ -869,7 +873,7 @@ elif PAGE == "add" and can_edit:
                 st.session_state['upload_key'] = st.session_state.get('upload_key', 0) + 1
                 st.session_state.edit_id = None
                 st.session_state.page_key = "🔍 ดูข้อมูลรายวัน"
-                st.session_state['_sidebar_nav'] = "🔍 ดูข้อมูลรายวัน"
+                st.session_state['_pending_nav'] = "🔍 ดูข้อมูลรายวัน"
                 st.rerun()
 
     else:
@@ -985,7 +989,7 @@ elif PAGE == "add" and can_edit:
                 st.session_state['upload_key'] = st.session_state.get('upload_key', 0) + 1
                 st.session_state.edit_id = None
                 st.session_state.page_key = "🔍 ดูข้อมูลรายวัน"
-                st.session_state['_sidebar_nav'] = "🔍 ดูข้อมูลรายวัน"
+                st.session_state['_pending_nav'] = "🔍 ดูข้อมูลรายวัน"
                 st.rerun()
 
 # ═══════════════════════════════════════════════════════
@@ -1078,7 +1082,7 @@ elif PAGE == "view":
                                 st.session_state.photos = []
                                 st.session_state['_photo_edit'] = None
                                 st.session_state.page_key = "➕ บันทึกงานประจำวัน"
-                                st.session_state['_sidebar_nav'] = "➕ บันทึกงานประจำวัน"
+                                st.session_state['_pending_nav'] = "➕ บันทึกงานประจำวัน"
                                 st.rerun()
                         with eb2:
                             if st.button("🗑️ ลบ", key=f"dl_{r['id']}"):
@@ -1134,6 +1138,10 @@ elif PAGE == "summary" and can_summary:
 
         if not DB['teams']:
             st.info("ยังไม่มีทีม"); return
+
+        # กรองออก: ทีม offline ที่ไม่มีข้อมูลในงวดนี้
+        rows_d = [(t,tot,rpts,pay,ip) for t,tot,rpts,pay,ip in rows_d
+                  if str(t.get('active','1')) != '0' or rpts]
 
         for t,tot,rpts,pay,ip in rows_d:
             days   = len(rpts)
@@ -1191,6 +1199,9 @@ elif PAGE == "summary" and can_summary:
     for t in DB['teams']:
         trpts = [r for r in DB['reports'] if r['teamId']==t['id']
                  and r['date'].startswith(f"{yr2}-{m_str}")]
+        # ข้ามทีม offline ที่ไม่มีข้อมูลในเดือนนี้
+        if str(t.get('active','1')) == '0' and not trpts:
+            continue
         tot    = sum(_f(r['total']) for r in trpts)
         manday = sum(_i(r['workers']) for r in trpts)
         pd_tot = 0.0
