@@ -1601,7 +1601,7 @@ elif PAGE == "productivity":
             workers = _i(r.get('workers', 0))
             total   = _f(r.get('total', 0))
             items   = r.get('items', [])
-            items_f = [it for it in items if _f(it.get('qty', 0)) > 0
+            items_f = [it for it in items if _f(it.get('qty', 0)) >= 0
                        and (f_proj == "ทุกประเภทงาน" or _proj_name(it['pid']) == f_proj)]
             if items_f:
                 for it in items_f:
