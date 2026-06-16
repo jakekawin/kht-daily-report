@@ -328,7 +328,12 @@ def check_team_login(team_obj, pw):
     """ตรวจ password ของทีมจาก column 'password' ใน Sheet"""
     if not team_obj or not pw:
         return False
-    stored = str(team_obj.get('password', '')).strip()
+    raw = team_obj.get('password', '')
+    # gspread อาจส่งตัวเลขเป็น int หรือ float
+    if isinstance(raw, float) and raw == int(raw):
+        stored = str(int(raw))
+    else:
+        stored = str(raw).strip()
     return bool(stored) and pw.strip() == stored
 
 def login_page():
