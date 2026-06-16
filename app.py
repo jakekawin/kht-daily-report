@@ -833,7 +833,8 @@ elif PAGE == "add" and can_edit:
 
         st.markdown("")
         st.markdown("**📋 รายการงาน (สำหรับติดตาม Productivity)**")
-        _active_projs = [p for p in DB['projects'] if str(p.get('active','1')) != '0']
+        _active_projs = sorted([p for p in DB['projects'] if str(p.get('active','1')) != '0'],
+                               key=lambda x: str(x.get('name', '')))
         if not _active_projs:
             st.warning("ยังไม่มีประเภทงาน Online — ขอให้ Admin เพิ่มหรือเปิดใช้งานก่อน")
         else:
@@ -847,7 +848,7 @@ elif PAGE == "add" and can_edit:
                     cur_pi = pids.index(item['pid']) if item.get('pid') in pids else 0
                     sel = st.selectbox(f"งาน#{idx+1}", pnames, index=cur_pi,
                                        key=f"psel_{idx}", label_visibility="collapsed")
-                    sp = DB['projects'][pnames.index(sel)]
+                    sp = _active_projs[pnames.index(sel)]
                     item['pid']  = sp['id']
                     item['unit'] = sp['unit']
                     item['rate'] = 0
@@ -934,7 +935,8 @@ elif PAGE == "add" and can_edit:
         # ── Unit-rate mode: items with qty × rate ──
         st.markdown("**📋 รายการงาน**")
 
-        _active_projs2 = [p for p in DB['projects'] if str(p.get('active','1')) != '0']
+        _active_projs2 = sorted([p for p in DB['projects'] if str(p.get('active','1')) != '0'],
+                                key=lambda x: str(x.get('name', '')))
         if not _active_projs2:
             st.warning("ยังไม่มีประเภทงาน Online — ขอให้ Admin เพิ่มหรือเปิดใช้งานก่อน")
         else:
@@ -952,7 +954,7 @@ elif PAGE == "add" and can_edit:
                     cur_pi = pids.index(item['pid']) if item.get('pid') in pids else 0
                     sel = st.selectbox(f"งาน#{idx+1}", pnames, index=cur_pi,
                                        key=f"psel_{idx}", label_visibility="collapsed")
-                    sp = DB['projects'][pnames.index(sel)]
+                    sp = _active_projs2[pnames.index(sel)]
                     item['pid']  = sp['id']
                     item['unit'] = sp['unit']
                     item['rate'] = _f(sp['unitRate'])
@@ -1427,7 +1429,7 @@ elif PAGE == "settings" and can_settings:
                         st.success("✅ บันทึกสำเร็จ"); st.rerun()
         st.markdown("---")
         if not DB['projects']: st.info("ยังไม่มีประเภทงาน")
-        for p in DB['projects']:
+        for p in sorted(DB['projects'], key=lambda x: str(x.get('name', ''))):
             p_online = str(p.get('active', '1')) != '0'
             p_icon   = "🟢" if p_online else "⭕"
             with st.expander(f"{p_icon} **{p['name']}** — {p['unit']} — ฿{N(p['unitRate'])}/หน่วย"):
