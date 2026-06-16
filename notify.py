@@ -89,7 +89,10 @@ def main():
         if isinstance(raw_items, str):
             try:    raw_items = json.loads(raw_items)
             except: raw_items = []
+        note = str(r.get('note', '') or '').strip()
         lines = [f"  ✅ {t['name']} ({workers} คน)"]
+        if note:
+            lines.append(f"     📝 {note}")
         if raw_items:
             for it in raw_items:
                 qty  = float(it.get('qty', 0) or 0)
@@ -99,7 +102,7 @@ def main():
                 qty_str  = int(qty) if qty == int(qty) else qty
                 prod_str = int(prod) if prod == int(prod) else prod
                 lines.append(f"     • {pn}: {qty_str} {unit} | Prod {prod_str}/คน")
-        else:
+        if not note and not raw_items:
             lines.append("     (ไม่มีรายการงาน)")
         return '\n'.join(lines)
 
