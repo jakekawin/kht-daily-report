@@ -469,6 +469,8 @@ if st.session_state.get('_pending_nav') in pages_map:
     st.session_state['_sidebar_nav'] = st.session_state['_pending_nav']
     st.session_state['_pending_nav'] = None
 
+_prev_page = st.session_state.page_key   # capture before sidebar may change it
+
 with st.sidebar:
     st.markdown(f"""
     <div style="padding:4px 0 14px 0">
@@ -505,7 +507,9 @@ with st.sidebar:
 
 # ─── TOP NAV BAR (mobile-primary, desktop-secondary) ────────────
 _pages_list = list(pages_map.keys())
-st.session_state['_top_nav'] = st.session_state.page_key   # sync before widget
+# Sync top nav ONLY when page changed from sidebar/programmatic (not from top nav itself)
+if st.session_state.page_key != _prev_page or st.session_state.get('_top_nav') not in _pages_list:
+    st.session_state['_top_nav'] = st.session_state.page_key
 _tn1, _tn2, _tn3 = st.columns([4, 1, 1])
 with _tn1:
     _top_pg = st.selectbox("📍", _pages_list, key="_top_nav",

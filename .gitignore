@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.env
+venv/
+
+# Credentials — never commit these
+*.json
+!requirements*.txt
+
+# macOS
+.DS_Store
+**/.DS_Store
+
+# Streamlit
+.streamlit/secrets.toml
