@@ -10,9 +10,9 @@ from google.oauth2.service_account import Credentials
 # ─── PAGE CONFIG ─────────────────────────────────────
 st.set_page_config(
     page_title="KHT Daily Report",
-    page_icon="🪖",
-    layout="wide",
-    initial_sidebar_state="expanded",
+    page_icon="🛠️",
+    layout="centered",
+    initial_sidebar_state="collapsed",
 )
 
 # ─── CONSTANTS ───────────────────────────────────────
@@ -57,6 +57,40 @@ st.markdown("""
   div[data-testid="stMetric"] label { font-size:0.82rem !important; color:#777 !important; }
   div[data-testid="stMetric"] div[data-testid="stMetricValue"] {
     font-size:1.6rem !important; color:#1e3a5f !important; }
+
+  /* ── Mobile responsive ── */
+  @media (max-width: 768px) {
+    /* Stack columns vertically on small screens */
+    [data-testid="column"] {
+      width: 100% !important;
+      min-width: 100% !important;
+      flex: 1 1 100% !important;
+    }
+    /* More breathing room for content */
+    .block-container {
+      padding-left: 0.8rem !important;
+      padding-right: 0.8rem !important;
+      padding-top: 1rem !important;
+    }
+    /* Bigger touch targets for buttons */
+    button {
+      min-height: 48px !important;
+      font-size: 1rem !important;
+    }
+    /* Full-width sidebar overlay on mobile */
+    [data-testid="stSidebar"] {
+      min-width: 80vw !important;
+      max-width: 90vw !important;
+    }
+    /* Number inputs & text inputs easier to tap */
+    input, select, textarea {
+      font-size: 16px !important;
+    }
+    /* Metric cards: 1 per row */
+    div[data-testid="stMetric"] {
+      margin-bottom: 0.5rem;
+    }
+  }
 </style>
 """, unsafe_allow_html=True)
 
@@ -673,7 +707,7 @@ elif PAGE == "add" and can_edit:
         if edit_rec:
             st.info(f"✏️ กำลังแก้ไข: {thd(edit_rec['date'])} — {get_team(edit_rec['teamId'])['name']}")
 
-    col1, col2, col3 = st.columns([1.5,1.5,1])
+    col1, col2 = st.columns([1,1])
     with col1:
         default_dt = datetime.strptime(edit_rec['date'],'%Y-%m-%d').date() if edit_rec else date.today()
         r_date = st.date_input("📅 วันที่ *", value=default_dt)
@@ -701,17 +735,18 @@ elif PAGE == "add" and can_edit:
             def_ti = tids.index(edit_rec['teamId']) if edit_rec and edit_rec['teamId'] in tids else 0
             r_tname = st.selectbox("👥 ทีมทำงาน *", tnames, index=def_ti)
             r_tid   = tids[tnames.index(r_tname)]
-    # ── Determine calc mode before col3 (needs r_tid already set in col2) ──
+    # ── Determine calc mode (needs r_tid already set in col2) ──
     _team_obj_pre = get_team(r_tid)
     _team_ct_pre  = get_contract_type(_team_obj_pre.get('contractTypeId', ''))
     calc_mode_pre = _team_ct_pre.get('calcMode', 'unit_rate')
 
-    with col3:
-        if calc_mode_pre == 'by_workers':
-            st.caption("🧑‍🔧 คนงานรวม")
-            workers_display = st.empty()
-            r_workers = 0
-        else:
+    if calc_mode_pre == 'by_workers':
+        st.caption("🧑‍🔧 คนงานรวม")
+        workers_display = st.empty()
+        r_workers = 0
+    else:
+        _wc1, _wc2 = st.columns([1, 2])
+        with _wc1:
             r_workers = st.number_input("🧑‍🔧 จำนวนคนงาน *", min_value=0,
                                         value=_i(edit_rec['workers']) if edit_rec else 0)
     r_note = st.text_area("📝 รายงานการทำงาน",
