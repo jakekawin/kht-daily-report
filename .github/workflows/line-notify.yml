@@ -4,6 +4,8 @@ on:
   schedule:
     # 15:00 Bangkok (UTC+7) = 08:00 UTC  |  วันจันทร์–เสาร์
     - cron: '0 8 * * 1-6'
+    # 17:15 Bangkok (UTC+7) = 10:15 UTC  |  วันจันทร์–เสาร์
+    - cron: '15 10 * * 1-6'
   workflow_dispatch:   # กดรันเองได้ใน GitHub Actions tab (สำหรับ test)
 
 jobs:
