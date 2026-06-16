@@ -60,33 +60,16 @@ st.markdown("""
 
   /* ── Mobile responsive ── */
   @media (max-width: 768px) {
-    /* More breathing room for content */
     .block-container {
       padding-left: 0.8rem !important;
       padding-right: 0.8rem !important;
       padding-top: 0.5rem !important;
     }
-    /* Number inputs & text inputs easier to tap — prevent iOS auto-zoom */
-    input, select, textarea {
-      font-size: 16px !important;
-    }
-    /* Metric cards spacing */
-    div[data-testid="stMetric"] {
-      margin-bottom: 0.5rem;
-    }
-    /* ซ่อน sidebar บนมือถือ (top nav ทำหน้าที่แทน) */
+    input, select, textarea { font-size: 16px !important; }
+    div[data-testid="stMetric"] { margin-bottom: 0.5rem; }
     section[data-testid="stSidebar"] { display: none !important; }
     [data-testid="collapsedControl"]  { display: none !important; }
-    /* Top nav bar — keep 3 items on one row, compact height */
-    [data-testid="stHorizontalBlock"]:first-of-type [data-testid="column"] {
-      flex: 1 1 0 !important;
-      min-width: 0 !important;
-      width: auto !important;
-    }
-    [data-testid="stHorizontalBlock"]:first-of-type button {
-      min-height: 40px !important;
-      padding: 0 4px !important;
-    }
+    button { min-height: 44px !important; }
   }
 </style>
 """, unsafe_allow_html=True)
@@ -510,20 +493,21 @@ _pages_list = list(pages_map.keys())
 # Sync top nav ONLY when page changed from sidebar/programmatic (not from top nav itself)
 if st.session_state.page_key != _prev_page or st.session_state.get('_top_nav') not in _pages_list:
     st.session_state['_top_nav'] = st.session_state.page_key
-_tn1, _tn2, _tn3 = st.columns([4, 1, 1])
-with _tn1:
-    _top_pg = st.selectbox("📍", _pages_list, key="_top_nav",
-                           label_visibility="collapsed")
-    if _top_pg != st.session_state.page_key:
-        st.session_state['_pending_nav'] = _top_pg
-        st.rerun()
-with _tn2:
-    if st.button("🔄", use_container_width=True, help="รีเฟรชข้อมูล"):
-        with st.spinner("..."):
+# Selectbox เต็มแถว — ง่ายต่อการแตะบนมือถือ
+_top_pg = st.selectbox("📍 เมนู", _pages_list, key="_top_nav",
+                       label_visibility="collapsed")
+if _top_pg != st.session_state.page_key:
+    st.session_state['_pending_nav'] = _top_pg
+    st.rerun()
+# ปุ่มสองอัน — แถวเดียวกัน
+_tb1, _tb2 = st.columns(2)
+with _tb1:
+    if st.button("🔄 รีเฟรช", use_container_width=True):
+        with st.spinner("กำลังโหลด..."):
             st.session_state.db = load_db()
         st.rerun()
-with _tn3:
-    if st.button("🚪", use_container_width=True, help="ออกจากระบบ"):
+with _tb2:
+    if st.button("🚪 ออกจากระบบ", use_container_width=True):
         for k in ['logged_in','role','db','wi','edit_id','page_key',
                   '_sidebar_nav','team_id','team_name']:
             st.session_state.pop(k, None)
