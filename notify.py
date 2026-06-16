@@ -1,14 +1,16 @@
 """
 KHT Daily Report — LINE Messaging API Notifier
-รันทุกวัน 15:00 (Bangkok) ผ่าน GitHub Actions
+รันทุกวัน 15:00 และ 17:15 (Bangkok) ผ่าน GitHub Actions
 ส่งแจ้งเตือนถ้ามีทีมยังไม่ส่งรายงาน
 """
 import os
 import json
 import requests
-from datetime import date
+from datetime import date, datetime, timezone, timedelta
 import gspread
 from google.oauth2.service_account import Credentials
+
+BKK = timezone(timedelta(hours=7))
 
 # ─── Config ────────────────────────────────────────────────
 SHEET_ID        = os.environ.get('SHEET_ID', '1PbxKOycC5aGIF2P98BKXoWhLmH7wCS8YEDjc-lEYn5A')
@@ -26,7 +28,7 @@ def thd(d: str) -> str:
     return f"{dt.day} {TH_MO[dt.month]} {dt.year + 543}"
 
 def load_db():
-    """โหลด teams + reports จาก Google Sheet"""
+    """โหลด teams + reports + projects จาก Google Sheet"""
     creds_raw = os.environ['GOOGLE_CREDENTIALS']
     creds_dict = json.loads(creds_raw)
     scopes = [
@@ -37,9 +39,10 @@ def load_db():
     gc    = gspread.authorize(creds)
     sh    = gc.open_by_key(SHEET_ID)
 
-    teams   = sh.worksheet('teams').get_all_records()
-    reports = sh.worksheet('reports').get_all_records()
-    return teams, reports
+    teams    = sh.worksheet('teams').get_all_records()
+    reports  = sh.worksheet('reports').get_all_records()
+    projects = sh.worksheet('projects').get_all_records()
+    return teams, reports, projects
 
 def send_line(text: str):
     """ส่งข้อความไปยัง LINE group"""
@@ -57,36 +60,68 @@ def send_line(text: str):
 
 # ─── Main ──────────────────────────────────────────────────
 def main():
-    today     = date.today().isoformat()
+    now_bkk   = datetime.now(BKK)
+    time_str  = now_bkk.strftime("%H:%M")
+    today     = now_bkk.date().isoformat()
     today_th  = thd(today)
 
     print(f"Checking reports for {today} ({today_th}) …")
 
-    teams, reports = load_db()
+    teams, reports, projects = load_db()
+
+    proj_map = {p['id']: p['name'] for p in projects}
 
     # กรองเฉพาะทีม Online
-    active_teams   = [t for t in teams if str(t.get('active', '1')) != '0']
-    # ทีมที่ส่งรายงานวันนี้
-    submitted_ids  = {r['teamId'] for r in reports if r.get('date') == today}
-    # ทีมที่ยังไม่ส่ง
-    missing        = [t for t in active_teams if t['id'] not in submitted_ids]
-    submitted_count = len(active_teams) - len(missing)
+    active_teams  = [t for t in teams if str(t.get('active', '1')) != '0']
+    # report วันนี้ → dict by teamId
+    today_reports = {r['teamId']: r for r in reports if r.get('date') == today}
+    submitted_ids = set(today_reports.keys())
+
+    submitted = [t for t in active_teams if t['id'] in submitted_ids]
+    missing   = [t for t in active_teams if t['id'] not in submitted_ids]
+
+    def team_detail(t):
+        """สร้างบรรทัดรายละเอียดของทีมที่ส่งแล้ว"""
+        r       = today_reports[t['id']]
+        workers = int(r.get('workers', 0) or 0)
+        # items อาจเป็น JSON string หรือ list
+        raw_items = r.get('items', [])
+        if isinstance(raw_items, str):
+            try:    raw_items = json.loads(raw_items)
+            except: raw_items = []
+        lines = [f"  ✅ {t['name']} ({workers} คน)"]
+        for it in raw_items:
+            qty  = float(it.get('qty', 0) or 0)
+            unit = it.get('unit', '')
+            pn   = proj_map.get(it.get('pid', ''), it.get('pid', '?'))
+            prod = round(qty / workers, 2) if workers and qty > 0 else 0
+            qty_str  = int(qty) if qty == int(qty) else qty
+            prod_str = int(prod) if prod == int(prod) else prod
+            lines.append(f"     • {pn}: {qty_str} {unit} | Prod {prod_str}/คน")
+        return '\n'.join(lines)
+
+    submitted_lines = '\n'.join(team_detail(t) for t in submitted) or "  (ยังไม่มี)"
+    missing_lines   = '\n'.join(f"  🔴 {t['name']}" for t in missing)
+
+    header = (
+        f"{'✅' if not missing else '⏰'} KHT Daily Report — {time_str} น.\n"
+        f"วันที่ {today_th}"
+    )
 
     if not missing:
         msg = (
-            f"✅ KHT Daily Report\n"
-            f"วันที่ {today_th}\n\n"
-            f"ทุกทีมส่งรายงานครบแล้ว 🎉\n"
-            f"({submitted_count}/{len(active_teams)} ทีม)"
+            f"{header}\n\n"
+            f"ทุกทีมส่งรายงานครบแล้ว 🎉\n\n"
+            f"📋 ส่งแล้ว ({len(submitted)}/{len(active_teams)} ทีม):\n"
+            f"{submitted_lines}"
         )
     else:
-        names = '\n'.join(f"  🔴 {t['name']}" for t in missing)
         msg = (
-            f"⏰ KHT Daily Report — แจ้งเตือน 15:00 น.\n"
-            f"วันที่ {today_th}\n\n"
-            f"📋 ยังไม่ส่งรายงาน ({len(missing)} ทีม):\n"
-            f"{names}\n\n"
-            f"✅ ส่งแล้ว {submitted_count}/{len(active_teams)} ทีม\n"
+            f"{header}\n\n"
+            f"📋 ส่งแล้ว ({len(submitted)}/{len(active_teams)} ทีม):\n"
+            f"{submitted_lines}\n\n"
+            f"🔴 ยังไม่ส่ง ({len(missing)} ทีม):\n"
+            f"{missing_lines}\n\n"
             f"⚠️ กรุณาส่งรายงานก่อน 17:00 น."
         )
 
