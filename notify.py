@@ -90,34 +90,47 @@ def main():
             try:    raw_items = json.loads(raw_items)
             except: raw_items = []
         lines = [f"  ✅ {t['name']} ({workers} คน)"]
-        for it in raw_items:
-            qty  = float(it.get('qty', 0) or 0)
-            unit = it.get('unit', '')
-            pn   = proj_map.get(it.get('pid', ''), it.get('pid', '?'))
-            prod = round(qty / workers, 2) if workers and qty > 0 else 0
-            qty_str  = int(qty) if qty == int(qty) else qty
-            prod_str = int(prod) if prod == int(prod) else prod
-            lines.append(f"     • {pn}: {qty_str} {unit} | Prod {prod_str}/คน")
+        if raw_items:
+            for it in raw_items:
+                qty  = float(it.get('qty', 0) or 0)
+                unit = it.get('unit', '')
+                pn   = proj_map.get(it.get('pid', ''), it.get('pid', '?'))
+                prod = round(qty / workers, 2) if workers and qty > 0 else 0
+                qty_str  = int(qty) if qty == int(qty) else qty
+                prod_str = int(prod) if prod == int(prod) else prod
+                lines.append(f"     • {pn}: {qty_str} {unit} | Prod {prod_str}/คน")
+        else:
+            lines.append("     (ไม่มีรายการงาน)")
         return '\n'.join(lines)
 
     submitted_lines = '\n'.join(team_detail(t) for t in submitted) or "  (ยังไม่มี)"
     missing_lines   = '\n'.join(f"  🔴 {t['name']}" for t in missing)
+
+    # รวมจำนวนคนทำงานทั้งหมดวันนี้
+    total_workers = sum(
+        int(today_reports[t['id']].get('workers', 0) or 0)
+        for t in submitted
+    )
 
     header = (
         f"{'✅' if not missing else '⏰'} KHT Daily Report — {time_str} น.\n"
         f"วันที่ {today_th}"
     )
 
+    worker_summary = f"👷 รวมคนงานวันนี้: {total_workers} คน"
+
     if not missing:
         msg = (
             f"{header}\n\n"
-            f"ทุกทีมส่งรายงานครบแล้ว 🎉\n\n"
+            f"ทุกทีมส่งรายงานครบแล้ว 🎉\n"
+            f"{worker_summary}\n\n"
             f"📋 ส่งแล้ว ({len(submitted)}/{len(active_teams)} ทีม):\n"
             f"{submitted_lines}"
         )
     else:
         msg = (
             f"{header}\n\n"
+            f"{worker_summary}\n\n"
             f"📋 ส่งแล้ว ({len(submitted)}/{len(active_teams)} ทีม):\n"
             f"{submitted_lines}\n\n"
             f"🔴 ยังไม่ส่ง ({len(missing)} ทีม):\n"
