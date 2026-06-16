@@ -90,6 +90,9 @@ st.markdown("""
     div[data-testid="stMetric"] {
       margin-bottom: 0.5rem;
     }
+    /* ซ่อน sidebar บนมือถือ (top nav ทำหน้าที่แทน) */
+    section[data-testid="stSidebar"] { display: none !important; }
+    [data-testid="collapsedControl"]  { display: none !important; }
   }
 </style>
 """, unsafe_allow_html=True)
@@ -431,7 +434,7 @@ for k, v in [('logged_in', False), ('role', None), ('wi', []),
               ('pos_items', []), ('photos', []), ('upload_key', 0),
               ('_photo_edit', None), ('edit_id', None), ('page_key', None),
               ('_save_msg', None), ('_sidebar_nav', None), ('_pending_nav', None),
-              ('team_id', None), ('team_name', None)]:
+              ('_top_nav', None), ('team_id', None), ('team_name', None)]:
     if k not in st.session_state:
         st.session_state[k] = v
 
@@ -505,6 +508,29 @@ with st.sidebar:
                    'team_id','team_name']:
             st.session_state.pop(k, None)
         st.rerun()
+
+# ─── TOP NAV BAR (mobile-primary, desktop-secondary) ────────────
+_pages_list = list(pages_map.keys())
+st.session_state['_top_nav'] = st.session_state.page_key   # sync before widget
+_tn1, _tn2, _tn3 = st.columns([4, 1, 1])
+with _tn1:
+    _top_pg = st.selectbox("📍", _pages_list, key="_top_nav",
+                           label_visibility="collapsed")
+    if _top_pg != st.session_state.page_key:
+        st.session_state['_pending_nav'] = _top_pg
+        st.rerun()
+with _tn2:
+    if st.button("🔄", use_container_width=True, help="รีเฟรชข้อมูล"):
+        with st.spinner("..."):
+            st.session_state.db = load_db()
+        st.rerun()
+with _tn3:
+    if st.button("🚪", use_container_width=True, help="ออกจากระบบ"):
+        for k in ['logged_in','role','db','wi','edit_id','page_key',
+                  '_sidebar_nav','team_id','team_name']:
+            st.session_state.pop(k, None)
+        st.rerun()
+st.markdown("---")
 
 # ═══════════════════════════════════════════════════════
 # PAGE: DASHBOARD
