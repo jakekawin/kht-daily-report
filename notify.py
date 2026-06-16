@@ -44,19 +44,19 @@ def load_db():
     projects = sh.worksheet('projects').get_all_records()
     return teams, reports, projects
 
-def send_line(text: str):
-    """ส่งข้อความไปยัง LINE group"""
+def send_line(messages: list):
+    """ส่ง messages (list of LINE message objects) ไปยัง LINE group
+    LINE รองรับสูงสุด 5 messages ต่อ 1 push call → แบ่ง batch อัตโนมัติ"""
     headers = {
         'Authorization': f'Bearer {LINE_TOKEN}',
         'Content-Type':  'application/json',
     }
-    payload = {
-        'to': LINE_GROUP_ID,
-        'messages': [{'type': 'text', 'text': text}],
-    }
-    r = requests.post(LINE_PUSH_URL, headers=headers, json=payload, timeout=10)
-    print(f"LINE API → {r.status_code}: {r.text}")
-    r.raise_for_status()
+    for i in range(0, len(messages), 5):
+        batch = messages[i:i+5]
+        payload = {'to': LINE_GROUP_ID, 'messages': batch}
+        r = requests.post(LINE_PUSH_URL, headers=headers, json=payload, timeout=10)
+        print(f"LINE API batch[{i}] → {r.status_code}: {r.text}")
+        r.raise_for_status()
 
 # ─── Main ──────────────────────────────────────────────────
 def main():
@@ -141,7 +141,28 @@ def main():
     print("─" * 40)
     print(msg)
     print("─" * 40)
-    send_line(msg)
+
+    # ── รวบรวมรูปภาพจากทุกทีมที่ส่งแล้ว ─────────────────────
+    photo_msgs = []
+    for t in submitted:
+        rep    = today_reports[t['id']]
+        raw_ph = rep.get('photos', [])
+        if isinstance(raw_ph, str):
+            try:    raw_ph = json.loads(raw_ph)
+            except: raw_ph = []
+        for ph in raw_ph:
+            if ph.get('url'):
+                photo_msgs.append({
+                    "type":               "image",
+                    "originalContentUrl": ph['url'],
+                    "previewImageUrl":    ph.get('thumb') or ph['url'],
+                })
+
+    print(f"Photos to send: {len(photo_msgs)}")
+
+    # ── ส่ง text + รูป ────────────────────────────────────────
+    all_msgs = [{"type": "text", "text": msg}] + photo_msgs
+    send_line(all_msgs)
     print("Done ✓")
 
 if __name__ == '__main__':
