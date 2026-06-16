@@ -5,6 +5,7 @@ KHT Daily Report — LINE Messaging API Notifier
 """
 import os
 import json
+import random
 import requests
 from datetime import date, datetime, timezone, timedelta
 import gspread
@@ -55,7 +56,10 @@ def send_line(messages: list):
         batch = messages[i:i+5]
         payload = {'to': LINE_GROUP_ID, 'messages': batch}
         r = requests.post(LINE_PUSH_URL, headers=headers, json=payload, timeout=10)
-        print(f"LINE API batch[{i}] → {r.status_code}: {r.text}")
+        print(f"LINE API batch[{i}] → {r.status_code}: {r.text[:200]}")
+        if r.status_code == 429:
+            print("⚠️ LINE monthly quota exceeded — ข้ามรูปที่เหลือ (text ส่งแล้ว)")
+            break
         r.raise_for_status()
 
 # ─── Main ──────────────────────────────────────────────────
@@ -161,6 +165,9 @@ def main():
                     "previewImageUrl":    ph.get('thumb') or ph['url'],
                 })
 
+    # สุ่มรูปแล้วจำกัด 4 รูป (1 text + 4 image = 5 msg = 1 batch = ประหยัด quota)
+    random.shuffle(photo_msgs)
+    photo_msgs = photo_msgs[:4]
     print(f"Photos to send: {len(photo_msgs)}")
 
     # ── ส่ง text + รูป ────────────────────────────────────────
