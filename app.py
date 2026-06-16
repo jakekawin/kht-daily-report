@@ -1057,8 +1057,6 @@ elif PAGE == "add" and can_edit:
         if save_btn:
             if not st.session_state.wi:
                 st.error("กรุณาเพิ่มรายการงานอย่างน้อย 1 รายการ")
-            elif any(w['qty'] <= 0 for w in st.session_state.wi):
-                st.error("กรุณาระบุปริมาณงานให้ครบทุกรายการ")
             else:
                 total = sum(w['amt'] for w in st.session_state.wi)
                 _rid = st.session_state.edit_id or next_id('reports')
