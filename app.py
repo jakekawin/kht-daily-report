@@ -1058,7 +1058,7 @@ elif PAGE == "view":
     st.markdown("### 🔍 ดูข้อมูลรายวัน")
 
     fc1,fc2,fc3 = st.columns([1.5,1,1])
-    with fc1: ftype = st.selectbox("การค้นหา", ["ทั้งหมด","ระบุวันที่","ช่วงวันที่"])
+    with fc1: ftype = st.selectbox("การค้นหา", ["ทั้งหมด","ระบุวันที่","ช่วงวันที่"], index=1)
     with fc2:
         topts = ["ทุกทีม"] + [t['name'] for t in DB['teams']]
         f_team = st.selectbox("ทีม", topts)
