@@ -341,9 +341,9 @@ def login_page():
     with col:
         st.markdown("""
         <div style="text-align:center;padding:40px 0 20px 0">
-          <div style="font-size:3.5rem">🪖</div>
+          <div style="font-size:3.5rem">🛠️</div>
           <h2 style="color:#1e3a5f;margin:8px 0 4px 0">KHT Daily Report</h2>
-          <p style="color:#888;font-size:0.9rem">ระบบบันทึกผลงานผู้รับเหมา</p>
+          <p style="color:#888;font-size:0.9rem">ระบบบันทึกการทำงาน</p>
         </div>
         """, unsafe_allow_html=True)
 
@@ -442,7 +442,7 @@ with st.sidebar:
     st.markdown(f"""
     <div style="padding:4px 0 14px 0">
       <div style="font-size:1.25rem;font-weight:700">🪖 KHT Daily Report</div>
-      <div style="font-size:0.78rem;color:#e07b2b">ระบบบันทึกผลงานผู้รับเหมา</div>
+      <div style="font-size:0.78rem;color:#e07b2b">ระบบบันทึกการทำงาน</div>
       <div style="font-size:0.75rem;color:rgba(255,255,255,0.55);margin-top:5px">
         {ROLE_LABEL[role]}{f" · {st.session_state.get('team_name','')}" if st.session_state.get('team_name') else ''}</div>
     </div>
