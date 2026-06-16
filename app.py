@@ -1670,10 +1670,9 @@ elif PAGE == "productivity":
             team_summary[tname]["cost"]    += _f(r.get('total', 0))
             for it in r.get('items', []):
                 qty = _f(it.get('qty', 0))
-                if qty > 0:
-                    pn = _proj_name(it['pid'])
-                    team_summary[tname]["items"][pn]["qty"]  += qty
-                    team_summary[tname]["items"][pn]["unit"]  = it.get('unit', '')
+                pn = _proj_name(it['pid'])
+                team_summary[tname]["items"][pn]["qty"]  += qty
+                team_summary[tname]["items"][pn]["unit"]  = it.get('unit', '')
 
         t_rows = []
         for tname, v in team_summary.items():
