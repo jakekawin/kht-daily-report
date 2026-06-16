@@ -63,7 +63,7 @@ st.markdown("""
     .block-container {
       padding-left: 0.8rem !important;
       padding-right: 0.8rem !important;
-      padding-top: 0.5rem !important;
+      padding-top: 2rem !important;
     }
     input, select, textarea { font-size: 16px !important; }
     div[data-testid="stMetric"] { margin-bottom: 0.5rem; }
@@ -494,7 +494,9 @@ _pages_list = list(pages_map.keys())
 if st.session_state.page_key != _prev_page or st.session_state.get('_top_nav') not in _pages_list:
     st.session_state['_top_nav'] = st.session_state.page_key
 # Selectbox เต็มแถว — ง่ายต่อการแตะบนมือถือ
-_top_pg = st.selectbox("🗂️ เลือกหน้า", _pages_list, key="_top_nav")
+st.markdown("**🗂️ เลือกหน้า**")
+_top_pg = st.selectbox("เลือกหน้า", _pages_list, key="_top_nav",
+                       label_visibility="collapsed")
 if _top_pg != st.session_state.page_key:
     st.session_state['_pending_nav'] = _top_pg
     st.rerun()
