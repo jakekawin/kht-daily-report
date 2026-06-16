@@ -63,13 +63,20 @@ st.markdown("""
     .block-container {
       padding-left: 0.8rem !important;
       padding-right: 0.8rem !important;
-      padding-top: 2rem !important;
+      padding-top: 3.5rem !important;
     }
     input, select, textarea { font-size: 16px !important; }
     div[data-testid="stMetric"] { margin-bottom: 0.5rem; }
     section[data-testid="stSidebar"] { display: none !important; }
     [data-testid="collapsedControl"]  { display: none !important; }
     button { min-height: 44px !important; }
+    /* Force column rows that contain buttons to stay horizontal */
+    [data-testid="stHorizontalBlock"]:has(button) [data-testid="column"] {
+      flex: 1 1 0 !important;
+      min-width: 0 !important;
+      width: 0 !important;
+      overflow: hidden;
+    }
   }
 </style>
 """, unsafe_allow_html=True)
