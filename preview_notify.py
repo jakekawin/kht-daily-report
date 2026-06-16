@@ -61,35 +61,75 @@ def build_msg(teams, reports, projects):
     missing   = [t for t in active_teams if str(t['id']) not in submitted_ids]
 
     def team_detail(t):
-        r = today_reports[str(t['id'])]
-        workers = int(r.get('workers', 0) or 0)
+        r         = today_reports[str(t['id'])]
+        workers   = int(r.get('workers', 0) or 0)
         raw_items = r.get('items', [])
         if isinstance(raw_items, str):
             try:    raw_items = json.loads(raw_items)
             except: raw_items = []
+        note = str(r.get('note', '') or '').strip()
+
         lines = [f"  ✅ {t['name']} ({workers} คน)"]
-        for it in raw_items:
-            qty  = float(it.get('qty', 0) or 0)
-            unit = it.get('unit', '')
-            pn   = proj_map.get(str(it.get('pid','')), '?')
-            prod = round(qty / workers, 2) if workers and qty > 0 else 0
-            qty_s  = int(qty)  if qty  == int(qty)  else qty
-            prod_s = int(prod) if prod == int(prod) else prod
-            lines.append(f"     • {pn}: {qty_s} {unit} | Prod {prod_s}/คน")
+        if note:
+            lines.append(f"     📝 {note}")
+        if raw_items:
+            for it in raw_items:
+                qty  = float(it.get('qty', 0) or 0)
+                unit = it.get('unit', '')
+                pn   = proj_map.get(str(it.get('pid','')), '?')
+                prod = round(qty / workers, 2) if workers and qty > 0 else 0
+                qty_s  = int(qty)  if qty  == int(qty)  else qty
+                prod_s = int(prod) if prod == int(prod) else prod
+                lines.append(f"     • {pn}: {qty_s} {unit} | Prod {prod_s}/คน")
+        if not note and not raw_items:
+            lines.append("     (ไม่มีรายการงาน)")
         return '\n'.join(lines)
 
+    # รวมจำนวนคนทำงานทั้งหมด
+    total_workers   = sum(int(today_reports[str(t['id'])].get('workers', 0) or 0) for t in submitted)
+    worker_summary  = f"👷 รวมคนงานวันนี้: {total_workers} คน"
     submitted_lines = '\n'.join(team_detail(t) for t in submitted) or "  (ยังไม่มี)"
     missing_lines   = '\n'.join(f"  🔴 {t['name']}" for t in missing)
     header = f"{'✅' if not missing else '⏰'} KHT Daily Report — {time_str} น.\nวันที่ {today_th}"
 
     if not missing:
-        return (f"{header}\n\nทุกทีมส่งรายงานครบแล้ว 🎉\n\n"
-                f"📋 ส่งแล้ว ({len(submitted)}/{len(active_teams)} ทีม):\n{submitted_lines}")
+        return (
+            f"{header}\n\n"
+            f"ทุกทีมส่งรายงานครบแล้ว 🎉\n"
+            f"{worker_summary}\n\n"
+            f"📋 ส่งแล้ว ({len(submitted)}/{len(active_teams)} ทีม):\n"
+            f"{submitted_lines}"
+        )
     else:
-        return (f"{header}\n\n"
-                f"📋 ส่งแล้ว ({len(submitted)}/{len(active_teams)} ทีม):\n{submitted_lines}\n\n"
-                f"🔴 ยังไม่ส่ง ({len(missing)} ทีม):\n{missing_lines}\n\n"
-                f"⚠️ กรุณาส่งรายงานก่อน 17:00 น.")
+        return (
+            f"{header}\n\n"
+            f"{worker_summary}\n\n"
+            f"📋 ส่งแล้ว ({len(submitted)}/{len(active_teams)} ทีม):\n"
+            f"{submitted_lines}\n\n"
+            f"🔴 ยังไม่ส่ง ({len(missing)} ทีม):\n"
+            f"{missing_lines}\n\n"
+            f"⚠️ กรุณาส่งรายงานก่อน 17:00 น."
+        )
+
+# ─── photo summary ────────────────────────────────────────
+def photo_summary(teams, reports):
+    now_bkk = datetime.now(BKK)
+    today   = now_bkk.date().isoformat()
+    today_reports = {str(r['teamId']): r for r in reports if str(r.get('date','')) == today}
+    active_teams  = [t for t in teams if str(t.get('active','1')) != '0']
+    submitted     = [t for t in active_teams if str(t['id']) in today_reports]
+
+    all_photos = []
+    for t in submitted:
+        raw_ph = today_reports[str(t['id'])].get('photos', [])
+        if isinstance(raw_ph, str):
+            try:    raw_ph = json.loads(raw_ph)
+            except: raw_ph = []
+        for ph in raw_ph:
+            if ph.get('url'):
+                all_photos.append((t['name'], ph['url']))
+
+    return all_photos
 
 # ─── main ─────────────────────────────────────────────────
 if __name__ == '__main__':
@@ -97,6 +137,13 @@ if __name__ == '__main__':
     creds_dict = load_creds()
     teams, reports, projects = load_db(creds_dict)
     msg = build_msg(teams, reports, projects)
+
     print("\n" + "═"*50)
     print(msg)
     print("═"*50)
+
+    # แสดงรูปที่จะส่ง
+    photos = photo_summary(teams, reports)
+    print(f"\n📸 รูปทั้งหมดวันนี้: {len(photos)} รูป (จะสุ่มส่ง {min(len(photos),4)} รูป)")
+    for i, (team, url) in enumerate(photos, 1):
+        print(f"  {i}. [{team}] {url}")
