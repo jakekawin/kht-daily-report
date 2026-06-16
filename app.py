@@ -458,6 +458,7 @@ if st.session_state.get('_sidebar_nav') not in pages_map:
 # Apply pending programmatic navigation BEFORE the radio widget is created
 if st.session_state.get('_pending_nav') in pages_map:
     st.session_state['_sidebar_nav'] = st.session_state['_pending_nav']
+    st.session_state['_top_nav']     = st.session_state['_pending_nav']  # sync top nav too
     st.session_state['_pending_nav'] = None
 
 _prev_page = st.session_state.page_key   # capture before sidebar may change it
