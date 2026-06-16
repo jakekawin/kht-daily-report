@@ -408,7 +408,8 @@ def login_page():
                     st.session_state.db = load_db()
                 st.session_state.wi = []
                 st.session_state.edit_id = None
-                st.session_state.page_key = None
+                # หัวหน้างาน → เริ่มที่หน้าบันทึก, อื่นๆ → Dashboard
+                st.session_state.page_key = "➕ บันทึกงานประจำวัน" if rk == ROLE_SUPER else None
                 st.rerun()
             else:
                 st.error("❌ รหัสผ่านไม่ถูกต้อง")
