@@ -1,6 +1,6 @@
 import streamlit as st
 import json, calendar
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from collections import defaultdict
 import uuid
 import pandas as pd
@@ -98,7 +98,9 @@ def next_id(table):
     nums = [int(r['id']) for r in records if str(r.get('id', '')).isdigit()]
     return str(max(nums) + 1) if nums else "1"
 def N(n):  return f"{float(n or 0):,.2f}"
-def today_str(): return date.today().isoformat()
+BKK = timezone(timedelta(hours=7))   # เวลาไทย (Streamlit Cloud รันบน UTC ต้องชดเชย)
+def today():     return datetime.now(BKK).date()
+def today_str(): return today().isoformat()
 
 def thd(s):
     if not s: return '-'
@@ -528,7 +530,7 @@ st.markdown("---")
 # PAGE: DASHBOARD
 # ═══════════════════════════════════════════════════════
 if PAGE == "dashboard":
-    now  = date.today()
+    now  = today()
     yr, mo, dy = now.year, now.month, now.day
 
     # ── Date picker: เลือกวันที่ดู (default = วันนี้) ──
@@ -727,7 +729,7 @@ elif PAGE == "add" and can_edit:
 
     col1, col2 = st.columns([1,1])
     with col1:
-        default_dt = datetime.strptime(edit_rec['date'],'%Y-%m-%d').date() if edit_rec else date.today()
+        default_dt = datetime.strptime(edit_rec['date'],'%Y-%m-%d').date() if edit_rec else today()
         r_date = st.date_input("📅 วันที่ *", value=default_dt)
     with col2:
         _all_teams  = DB['teams']
@@ -1116,7 +1118,7 @@ elif PAGE == "view":
     with fc3: sort_dir = st.selectbox("เรียง", ["วันที่ล่าสุด","วันที่เก่าสุด"])
 
     f_date = f_start = f_end = None
-    if ftype == "ระบุวันที่": f_date  = st.date_input("วันที่", value=date.today())
+    if ftype == "ระบุวันที่": f_date  = st.date_input("วันที่", value=today())
     elif ftype == "ช่วงวันที่":
         dc1,dc2 = st.columns(2)
         with dc1: f_start = st.date_input("จากวันที่")
@@ -1203,9 +1205,9 @@ elif PAGE == "view":
 elif PAGE == "summary" and can_summary:
     st.markdown("### 📈 สรุปรายงวด")
     sc1,sc2,sc3 = st.columns([1,1,1])
-    with sc1: sel_year  = st.number_input("ปี (ค.ศ.)", min_value=2020, max_value=2035, value=date.today().year)
+    with sc1: sel_year  = st.number_input("ปี (ค.ศ.)", min_value=2020, max_value=2035, value=today().year)
     with sc2: sel_month = st.selectbox("เดือน", list(range(1,13)),
-                                        index=date.today().month-1,
+                                        index=today().month-1,
                                         format_func=lambda m: TH_MO[m])
     yr2, mo2 = int(sel_year), int(sel_month)
     with sc3:
@@ -1280,7 +1282,7 @@ elif PAGE == "summary" and can_summary:
 
             if st.session_state.get(f"mark_{t['id']}_{period}"):
                 with st.form(key=f"pf_{t['id']}_{period}"):
-                    pd_inp = st.date_input("วันที่จ่าย", value=date.today())
+                    pd_inp = st.date_input("วันที่จ่าย", value=today())
                     pn_inp = st.text_input("หมายเหตุ")
                     if st.form_submit_button("✅ ยืนยัน"):
                         prec = {'id':next_id('payments'),'tid':t['id'],'y':yr2,'mo':mo2,'p':period,
@@ -1563,7 +1565,7 @@ elif PAGE == "settings" and can_settings:
 elif PAGE == "productivity":
     st.markdown("### 📉 Productivity — ติดตามผลงาน")
 
-    now = date.today()
+    now = today()
 
     # ─── helpers ───────────────────────────────────────────────────────────
     def _proj_name(pid):
@@ -1920,7 +1922,7 @@ elif PAGE == "productivity":
 
         # ── build 8-week buckets ──
         WEEKS = 8
-        today_td = date.today()
+        today_td = today()
         # วันจันทร์ของสัปดาห์นี้
         monday_this = today_td - timedelta(days=today_td.weekday())
 
