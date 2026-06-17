@@ -230,6 +230,54 @@ def save_db(tables=None):
     except Exception as e:
         st.error(f"❌ บันทึกไม่สำเร็จ: {e}")
 
+# ─── ROW-LEVEL SAVE สำหรับ reports (กันข้อมูลทีมอื่นหายจากการเขียนทับทั้งตาราง) ──
+def _record_to_row(headers, item):
+    row = []
+    for h in headers:
+        val = item.get(h, '')
+        if isinstance(val, list):
+            val = json.dumps(val, ensure_ascii=False)
+        if isinstance(val, bool):
+            val = str(val).upper()
+        if val is None:
+            val = ''
+        row.append(val)
+    return row
+
+def _find_row_by_id(ws, rec_id):
+    """หา index แถว (1-based) ที่คอลัมน์ A (id) ตรงกับ rec_id; ไม่เจอคืน None (แถว 1 = header)"""
+    target = str(rec_id)
+    for i, v in enumerate(ws.col_values(1), start=1):
+        if str(v) == target:
+            return i
+    return None
+
+def save_report(rec):
+    """บันทึก report ทีละแถว: append เมื่อใหม่ / overwrite เฉพาะแถวนั้นเมื่อแก้ไข
+    ไม่ล้างทั้งตาราง → รายงานทีมอื่นที่ส่งพร้อมกันจะไม่ถูกเขียนทับหาย"""
+    try:
+        gc = get_gc(); sh = gc.open_by_key(SHEET_ID)
+        ws = _ws(sh, "reports")
+        row = _record_to_row(SHEET_HEADERS["reports"], rec)
+        idx = _find_row_by_id(ws, rec['id'])
+        if idx and idx > 1:
+            ws.update(range_name=f"A{idx}", values=[row], value_input_option="RAW")
+        else:
+            ws.append_row(row, value_input_option="RAW")
+    except Exception as e:
+        st.error(f"❌ บันทึกไม่สำเร็จ: {e}")
+
+def delete_report(rec_id):
+    """ลบ report ทีละแถวด้วย id (re-fetch ตำแหน่งล่าสุดก่อนลบ กันลบผิดแถว)"""
+    try:
+        gc = get_gc(); sh = gc.open_by_key(SHEET_ID)
+        ws = _ws(sh, "reports")
+        idx = _find_row_by_id(ws, rec_id)
+        if idx and idx > 1:
+            ws.delete_rows(idx)
+    except Exception as e:
+        st.error(f"❌ ลบไม่สำเร็จ: {e}")
+
 # ─── DB ACCESSORS ─────────────────────────────────────
 def get_team(tid):
     return next((x for x in st.session_state.db['teams'] if x['id'] == tid),
@@ -975,7 +1023,7 @@ elif PAGE == "add" and can_edit:
                     else:
                         DB['reports'].append(rec)
                         msg = "✅ บันทึกสำเร็จ"
-                    save_db("reports")
+                    save_report(rec)
                 st.session_state['_save_msg'] = msg
                 st.session_state.pos_items = []
                 st.session_state.photos = []
@@ -1090,7 +1138,7 @@ elif PAGE == "add" and can_edit:
                     else:
                         DB['reports'].append(rec)
                         msg = "✅ บันทึกสำเร็จ"
-                    save_db("reports")
+                    save_report(rec)
                 st.session_state['_save_msg'] = msg
                 st.session_state.wi = []
                 st.session_state.photos = []
@@ -1195,8 +1243,8 @@ elif PAGE == "view":
                                 st.rerun()
                         with eb2:
                             if st.button("🗑️ ลบ", key=f"dl_{r['id']}"):
+                                with st.spinner("กำลังลบ..."): delete_report(r['id'])
                                 DB['reports'] = [x for x in DB['reports'] if x['id']!=r['id']]
-                                with st.spinner("กำลังบันทึก..."): save_db("reports")
                                 st.rerun()
 
 # ═══════════════════════════════════════════════════════
