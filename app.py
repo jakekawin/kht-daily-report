@@ -574,6 +574,15 @@ with _tb2:
         st.rerun()
 st.markdown("---")
 
+# ── โหลดข้อมูลสดอัตโนมัติเมื่อ "เพิ่งเข้า" หน้าแสดงข้อมูล ──
+# กันกรณีเครื่องอื่นเห็นรายงานที่เพิ่งบันทึกไม่ครบ
+# โหลดครั้งเดียวตอนเข้าหน้า (ไม่ใช่ทุกครั้งที่กดปุ่ม/เปลี่ยนวันที่ → ไม่กิน Google API quota)
+if PAGE in ("dashboard", "view") and st.session_state.get('_auto_loaded_page') != PAGE:
+    with st.spinner("กำลังโหลดข้อมูลล่าสุด..."):
+        st.session_state.db = load_db()
+        DB = st.session_state.db
+st.session_state['_auto_loaded_page'] = PAGE
+
 # ═══════════════════════════════════════════════════════
 # PAGE: DASHBOARD
 # ═══════════════════════════════════════════════════════
