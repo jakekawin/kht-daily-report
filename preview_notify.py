@@ -8,6 +8,7 @@ from datetime import date, datetime, timezone, timedelta
 from google.oauth2.service_account import Credentials
 
 SHEET_ID = "1PbxKOycC5aGIF2P98BKXoWhLmH7wCS8YEDjc-lEYn5A"
+APP_URL  = "https://kht-report.streamlit.app"
 BKK = timezone(timedelta(hours=7))
 TH_MO = {1:'ม.ค.',2:'ก.พ.',3:'มี.ค.',4:'เม.ย.',5:'พ.ค.',6:'มิ.ย.',
           7:'ก.ค.',8:'ส.ค.',9:'ก.ย.',10:'ต.ค.',11:'พ.ย.',12:'ธ.ค.'}
@@ -90,7 +91,7 @@ def build_msg(teams, reports, projects):
     worker_summary  = f"👷 รวมคนงานวันนี้: {total_workers} คน"
     submitted_lines = '\n'.join(team_detail(t) for t in submitted) or "  (ยังไม่มี)"
     missing_lines   = '\n'.join(f"  🔴 {t['name']}" for t in missing)
-    header = f"{'✅' if not missing else '⏰'} KHT Daily Report — {time_str} น.\nวันที่ {today_th}"
+    header = f"📲 ลงรายงาน: {APP_URL}\n\n{'✅' if not missing else '⏰'} KHT Daily Report — {time_str} น.\nวันที่ {today_th}"
 
     if not missing:
         return (

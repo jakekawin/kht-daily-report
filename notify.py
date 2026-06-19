@@ -18,6 +18,7 @@ SHEET_ID        = os.environ.get('SHEET_ID', '1PbxKOycC5aGIF2P98BKXoWhLmH7wCS8YE
 LINE_TOKEN      = os.environ['LINE_CHANNEL_TOKEN']
 LINE_GROUP_ID   = os.environ['LINE_GROUP_ID']
 LINE_PUSH_URL   = 'https://api.line.me/v2/bot/message/push'
+APP_URL         = 'https://kht-report.streamlit.app'
 
 TH_MO = {1:'ม.ค.',2:'ก.พ.',3:'มี.ค.',4:'เม.ย.',5:'พ.ค.',6:'มิ.ย.',
           7:'ก.ค.',8:'ส.ค.',9:'ก.ย.',10:'ต.ค.',11:'พ.ย.',12:'ธ.ค.'}
@@ -143,6 +144,7 @@ def main():
     )
 
     header = (
+        f"📲 ลงรายงาน: {APP_URL}\n\n"
         f"{'✅' if not missing else '⏰'} KHT Daily Report — {time_str} น.\n"
         f"วันที่ {today_th}"
     )
